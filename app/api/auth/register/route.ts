@@ -39,19 +39,35 @@ export async function POST(req: NextRequest) {
     // 密码加密
     const hashedPassword = await hash(password, 10)
 
-    // 创建用户
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true,
-      },
+    // 使用事务创建用户和默认知识库
+    const user = await prisma.$transaction(async (tx) => {
+      // 1. 创建用户
+      const newUser = await tx.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      })
+
+      // 2. 创建默认知识库
+      await tx.repository.create({
+        data: {
+          name: "默认知识库",
+          description: "存放您的所有笔记",
+          userId: newUser.id,
+          isDefault: true,
+          color: "#000000", // 默认颜色
+        },
+      })
+
+      return newUser
     })
 
     return apiSuccess(user)

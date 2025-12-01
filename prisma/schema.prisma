@@ -21,6 +21,11 @@ model User {
   updatedAt     DateTime  @updatedAt
   accounts      Account[]
   sessions      Session[]
+  
+  // 业务关联
+  repositories  Repository[]
+  notes         Note[]
+  tags          Tag[]
 }
 
 model Account {
@@ -56,4 +61,61 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// 知识库模型
+model Repository {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  isDefault   Boolean  @default(false) // 是否为默认知识库
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteRepositories NoteRepository[]
+}
+
+// 笔记模型
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String?  @db.Text
+  userId    String   // 所有者
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteRepositories NoteRepository[]
+  tags             Tag[]            @relation("NoteTags")
+}
+
+// 笔记-知识库关联表 (多对多)
+model NoteRepository {
+  noteId       String
+  repositoryId String
+  userId       String   // 冗余字段，用于快速权限验证
+  addedAt      DateTime @default(now())
+
+  note       Note       @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, repositoryId])
+  @@index([userId])
+}
+
+// 标签模型
+model Tag {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  color     String?
+  createdAt DateTime @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes Note[] @relation("NoteTags")
+
+  @@unique([name, userId]) // 同一个用户不能有重名标签
 }
