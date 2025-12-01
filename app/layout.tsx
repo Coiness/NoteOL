@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { Toaster } from "@/components/ui/sonner"
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Next.js App",
-  description: "Next.js app with Zustand, shadcn/ui, and TailwindCSS",
+  title: "NoteOL - 在线笔记平台",
+  description: "一个现代化的在线笔记与知识库平台",
 };
 
 export default function RootLayout({
@@ -12,8 +13,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="zh-CN">
+      <body>
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }
