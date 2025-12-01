@@ -7,7 +7,7 @@ export default function Home() {
   const { count, increment, decrement } = useStore();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-500 to-purple-600">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-r from-blue-500 to-purple-600">
       <div className="text-center space-y-8">
         <div>
           <h1 className="text-5xl font-bold text-white mb-4">
