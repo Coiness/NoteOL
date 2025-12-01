@@ -3,7 +3,8 @@ agent: agent
 ---
 我正在开发在线笔记平台项目，开发顺序如下。
 [x] 1.项目初始化与工程化
-[] 2.实现用户模块（NextAuth.js集成与用户界面）
+[x] 1.5.全局错误处理与API响应封装
+[x] 2.实现用户模块（NextAuth.js集成与用户界面）
 [] 3.笔记模块CRUD（包括MarkDown集成）
 [] 4.知识库分类模块与界面集成
 [] 5.标签模块与搜索模块
@@ -27,8 +28,10 @@ NoteOL/
 │   │   └── notes/
 │   ├── api/
 │   │   └── auth/[...nextauth]/route.ts
+│   ├── error.tsx           # 全局错误 UI
 │   ├── globals.css
 │   ├── layout.tsx
+│   ├── not-found.tsx       # 全局 404 UI
 │   └── page.tsx
 ├── components/
 │   ├── auth/               # 认证组件
@@ -38,6 +41,7 @@ NoteOL/
 │   │   └── providers.tsx
 │   └── ui/                 # shadcn/ui 组件
 ├── lib/
+│   ├── api-response.ts     # 统一 API 响应与错误处理
 │   ├── auth.ts             # NextAuth 配置
 │   ├── prisma.ts           # Prisma Client 单例
 │   └── utils.ts
@@ -75,7 +79,16 @@ Prisma ORM
 认证与安全
 NextAuth.js 身份验证
 
-请你根据我的要求，完成相应模块的代码，可以一步一步来。关于重要信息像是数据结构，目标方法等内容，如果你拿不定可以先询问我。在书写代码css时，你可以先去globals.css查看是否有相关预定样式，如果没有，你也可以自行定义。对于组件，你也可以随意下载shadcn/ui的组件。辛苦了
+### 💡 开发指令与规范
+
+请根据当前进度和我的指令，逐步完成相应模块的代码。
+
+**开发规范：**
+1.  **确认需求**：在开始编码前，如果对数据结构、业务逻辑或目标方法有疑问，请先向我确认。
+2.  **样式管理**：优先复用 `globals.css` 中的预定义样式或 Tailwind CSS 原子类。如需自定义，请保持风格统一。
+3.  **组件使用**：你可以自由使用 `shadcn/ui` 组件库，按需安装和配置。
+4.  **错误处理**：请遵循已建立的全局错误处理规范（`lib/api-response.ts` 和 `app/error.tsx`），API 必须使用 `handleApiError` 处理异常。
+5.  **代码质量**：保持代码整洁，添加必要的注释，并确保类型安全。
 
 
 
