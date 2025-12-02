@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -139,6 +140,13 @@ export function NoteEditor({ value, onChange, readOnly = false }: NoteEditorProp
       onChange(editor.getHTML())
     },
   })
+
+  // 监听外部 value 变化，更新编辑器内容
+  useEffect(() => {
+    if (editor && value !== editor.getHTML()) {
+      editor.commands.setContent(value)
+    }
+  }, [value, editor])
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-card">
