@@ -118,52 +118,59 @@ export async function GET(req: NextRequest) {
     
     const { searchParams } = new URL(req.url)
     const repositoryId = searchParams.get("repositoryId")
-    const page = parseInt(searchParams.get("page") || "1")
-    const limit = parseInt(searchParams.get("limit") || "10")
-    const skip = (page - 1) * limit
+    // 暂时移除分页，简化逻辑，后续再加回
+    // const page = parseInt(searchParams.get("page") || "1")
+    // const limit = parseInt(searchParams.get("limit") || "10")
+    // const skip = (page - 1) * limit
 
-    // Build where clause
-    const where: any = {
-        userId: userId
-    }
-    
-    if (repositoryId) {
-        where.noteRepositories = {
-            some: {
-                repositoryId: repositoryId
-            }
+    let notes;
+
+    // 如果指定了 repositoryId，且不是 "all" (假设前端传 "all" 或不传代表所有)
+    if (repositoryId && repositoryId !== "all") {
+        // 验证 repository 是否属于该用户
+        const repo = await prisma.repository.findUnique({
+            where: { id: repositoryId }
+        })
+        
+        // 如果是默认知识库，或者知识库不存在/无权访问，则返回所有笔记 (或者报错，这里选择返回所有作为兜底，或者严格一点报错)
+        // 根据之前的讨论：默认知识库包含所有笔记。
+        // 如果 repositoryId 对应的是默认知识库，我们直接查所有笔记。
+        if (repo && repo.userId === userId) {
+             if (repo.isDefault) {
+                 notes = await prisma.note.findMany({
+                    where: { userId: userId },
+                    orderBy: { updatedAt: 'desc' },
+                    include: { tags: true }
+                 })
+             } else {
+                 // 查询特定知识库的笔记
+                 notes = await prisma.note.findMany({
+                     where: {
+                         userId: userId,
+                         noteRepositories: {
+                             some: {
+                                 repositoryId: repositoryId
+                             }
+                         }
+                     },
+                     orderBy: { updatedAt: 'desc' },
+                     include: { tags: true }
+                 })
+             }
+        } else {
+            // 知识库不存在或无权访问，返回空数组
+            notes = []
         }
-    }
-
-    const [notes, total] = await prisma.$transaction([
-        prisma.note.findMany({
-            where,
-            skip,
-            take: limit,
+    } else {
+        // 没有指定 repositoryId，返回所有笔记 (对应默认知识库逻辑)
+        notes = await prisma.note.findMany({
+            where: { userId: userId },
             orderBy: { updatedAt: 'desc' },
-            include: {
-                tags: true,
-                noteRepositories: {
-                    include: {
-                        repository: {
-                            select: { id: true, name: true, color: true }
-                        }
-                    }
-                }
-            }
-        }),
-        prisma.note.count({ where })
-    ])
+            include: { tags: true }
+        })
+    }
 
-    return apiSuccess({
-        notes,
-        pagination: {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit)
-        }
-    })
+    return apiSuccess({ notes })
 
   } catch (error) {
     return handleApiError(error)
