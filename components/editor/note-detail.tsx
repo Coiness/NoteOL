@@ -9,14 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Save, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-
-interface Note {
-  id: string
-  title: string
-  content: string
-  updatedAt: string
-  tags: { id: string; name: string }[]
-}
+import { Note } from "@/types"
 
 interface NoteDetailProps {
   noteId: string

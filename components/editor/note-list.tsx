@@ -8,13 +8,7 @@ import { Plus, FileText, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
-
-interface Note {
-  id: string
-  title: string
-  updatedAt: string
-  content?: string
-}
+import { Note } from "@/types"
 
 export function NoteList() {
   const params = useParams()

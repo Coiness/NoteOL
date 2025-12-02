@@ -4,14 +4,7 @@
 
 import { NextResponse } from "next/server"
 import { ZodError } from "zod"
-
-// 定义标准的 API 响应格式
-export type ApiResponse<T = any> = {
-  success: boolean
-  data?: T
-  error?: string
-  details?: any
-}
+import { ApiResponse } from "@/types"
 
 export class AppError extends Error {
   public statusCode: number
