@@ -13,9 +13,10 @@ import { Note } from "@/types"
 
 interface NoteDetailProps {
   noteId: string
+  onDeleteSuccess?: () => void
 }
 
-export function NoteDetail({ noteId }: NoteDetailProps) {
+export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [title, setTitle] = useState("")
@@ -72,7 +73,11 @@ export function NoteDetail({ noteId }: NoteDetailProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notes"] })
       toast.success("笔记已删除")
-      router.push("/notes") // 返回列表页或首页
+      if (onDeleteSuccess) {
+        onDeleteSuccess()
+      } else {
+        router.push("/notes") // 返回列表页或首页
+      }
     },
   })
 

@@ -17,17 +17,6 @@ export function MainNav({
       {...props}
     >
       <Link
-        href="/notes"
-        className={cn(
-          "text-sm font-medium transition-colors hover:text-primary",
-          pathname.startsWith("/notes")
-            ? "text-primary"
-            : "text-muted-foreground"
-        )}
-      >
-        笔记
-      </Link>
-      <Link
         href="/repositories"
         className={cn(
           "text-sm font-medium transition-colors hover:text-primary",
@@ -36,7 +25,7 @@ export function MainNav({
             : "text-muted-foreground"
         )}
       >
-        知识库
+        我的知识库
       </Link>
     </nav>
   )

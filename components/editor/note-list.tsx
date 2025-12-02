@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Plus, FileText, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -10,17 +10,27 @@ import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { Note } from "@/types"
 
-export function NoteList() {
+interface NoteListProps {
+  repositoryId?: string
+}
+
+export function NoteList({ repositoryId }: NoteListProps) {
   const params = useParams()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const currentNoteId = params?.noteId as string
+  
+  // 优先使用 URL query 参数中的 noteId，其次是路由参数中的 noteId (兼容旧路由)
+  const currentNoteId = searchParams.get("noteId") || params?.noteId as string
 
   // 获取笔记列表
   const { data: notes, isLoading } = useQuery<Note[]>({
-    queryKey: ["notes"],  // 查询键，用于标识和缓存该查询
-    queryFn: async () => {  // 查询函数
-      const res = await fetch("/api/notes")
+    queryKey: ["notes", repositoryId],  // 加入 repositoryId 作为缓存键的一部分
+    queryFn: async () => {
+      const url = repositoryId 
+        ? `/api/notes?repositoryId=${repositoryId}`
+        : "/api/notes"
+      const res = await fetch(url)
       if (!res.ok) throw new Error("Failed to fetch notes")
       const data = await res.json()
       return data.data.notes
@@ -33,21 +43,30 @@ export function NoteList() {
       const res = await fetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "无标题笔记" }),
+        body: JSON.stringify({ 
+          title: "无标题笔记",
+          repositoryId: repositoryId // 传入当前知识库ID
+        }),
       })
       if (!res.ok) throw new Error("Failed to create note")
       return res.json()
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["notes"] })
-      router.push(`/notes/${data.data.id}`)
+      // 如果在知识库视图，使用 query 参数跳转
+      if (repositoryId) {
+        router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
+      } else {
+        // 兼容旧视图
+        router.push(`/notes/${data.data.id}`)
+      }
     },
   })
 
   return (
     <div className="flex h-full flex-col border-r bg-muted/10">
       <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="text-lg font-semibold">所有笔记</h2>
+        <h2 className="text-lg font-semibold">笔记列表</h2>
         <Button 
             size="icon" 
             variant="ghost" 
@@ -84,7 +103,7 @@ export function NoteList() {
             {notes?.map((note) => (
               <Link
                 key={note.id}
-                href={`/notes/${note.id}`}
+                href={repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`}
                 className={cn(
                   "flex flex-col gap-1 p-4 border-b hover:bg-muted/50 transition-colors",
                   currentNoteId === note.id && "bg-muted"
