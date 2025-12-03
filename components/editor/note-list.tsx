@@ -1,11 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Plus, FileText, Loader2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Plus, FileText, Loader2, Search } from "lucide-react"
+import { cn, stripHtml } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { Note } from "@/types"
@@ -19,6 +22,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const [searchQuery, setSearchQuery] = useState("")
   
   // 优先使用 URL query 参数中的 noteId，其次是路由参数中的 noteId (兼容旧路由)
   const currentNoteId = searchParams.get("noteId") || params?.noteId as string
@@ -62,23 +66,52 @@ export function NoteList({ repositoryId }: NoteListProps) {
       }
     },
   })
+  // 过滤笔记
+  const filteredNotes = notes?.filter(note => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    
+    // 标签搜索 (#tag)
+    if (query.startsWith("#")) {
+        const tagName = query.slice(1)
+        if (!tagName) return true
+        return note.tags?.some(tag => tag.name.toLowerCase().includes(tagName))
+    }
+
+    // 普通搜索 (标题或内容)
+    return (
+        note.title.toLowerCase().includes(query) || 
+        (note.content && note.content.toLowerCase().includes(query))
+    )
+  })
 
   return (
     <div className="flex h-full flex-col border-r bg-muted/10">
-      <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="text-lg font-semibold">笔记列表</h2>
-        <Button 
-            size="icon" 
-            variant="ghost" 
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending}
-        >
-          {createMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Plus className="h-4 w-4" />
-          )}
-        </Button>
+      <div className="flex flex-col gap-2 p-4 border-b">
+        <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">笔记列表</h2>
+            <Button 
+                size="icon" 
+                variant="ghost" 
+                onClick={() => createMutation.mutate()}
+                disabled={createMutation.isPending}
+            >
+            {createMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+                <Plus className="h-4 w-4" />
+            )}
+            </Button>
+        </div>
+        <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+                placeholder="搜索笔记 (#标签 或 关键词)" 
+                className="pl-8 h-9"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+            />
+        </div>
       </div>
       
       <div className="flex-1 overflow-y-auto">
@@ -86,21 +119,23 @@ export function NoteList({ repositoryId }: NoteListProps) {
           <div className="flex justify-center p-4">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        ) : notes?.length === 0 ? (
+        ) : filteredNotes?.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
             <FileText className="h-12 w-12 mb-2 opacity-20" />
-            <p>暂无笔记</p>
-            <Button 
-                variant="link" 
-                onClick={() => createMutation.mutate()}
-                className="mt-2"
-            >
-                创建第一篇笔记
-            </Button>
+            <p>{searchQuery ? "未找到匹配笔记" : "暂无笔记"}</p>
+            {!searchQuery && (
+                <Button 
+                    variant="link" 
+                    onClick={() => createMutation.mutate()}
+                    className="mt-2"
+                >
+                    创建第一篇笔记
+                </Button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col">
-            {notes?.map((note) => (
+            {filteredNotes?.map((note) => (
               <Link
                 key={note.id}
                 href={repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`}
@@ -112,9 +147,16 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 <div className="font-medium truncate">
                   {note.title || "无标题笔记"}
                 </div>
+                <div className="flex gap-1 flex-wrap mb-1">
+                    {note.tags?.map(tag => (
+                        <Badge key={tag.id} variant="outline" className="text-[10px] px-1 py-0 h-4">
+                            #{tag.name}
+                        </Badge>
+                    ))}
+                </div>
                 <div className="text-xs text-muted-foreground flex justify-between">
                   <span className="truncate max-w-[150px]">
-                    {note.content?.slice(0, 30) || "无内容"}
+                    {stripHtml(note.content || "").slice(0, 30) || "无内容"}
                   </span>
                   <span>
                     {formatDistanceToNow(new Date(note.updatedAt), { 
@@ -131,3 +173,4 @@ export function NoteList({ repositoryId }: NoteListProps) {
     </div>
   )
 }
+

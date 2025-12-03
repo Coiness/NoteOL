@@ -11,9 +11,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { signOut, useSession } from "next-auth/react"
+import { useQueryClient } from "@tanstack/react-query"
 
 export function UserNav() {
   const { data: session } = useSession()
+  const queryClient = useQueryClient()
+
+  const handleLogout = async () => {
+    queryClient.clear() // 清空所有缓存
+    await signOut({ callbackUrl: "/login" })
+  }
 
   return (
     <DropdownMenu>
@@ -35,7 +42,7 @@ export function UserNav() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => signOut()}>
+        <DropdownMenuItem onClick={handleLogout}>
           退出登录
         </DropdownMenuItem>
       </DropdownMenuContent>
