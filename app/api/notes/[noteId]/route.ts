@@ -49,7 +49,7 @@ export async function PUT(req: NextRequest, props: RouteProps) {
     try {
         const params = await props.params
         const session = await getServerSession(authOptions)
-        if (!session) throw new AppError("Unauthorized", 401)
+        if (!session?.user?.id) throw new AppError("Unauthorized", 401)
 
         const json = await req.json()
         const body = noteUpdateSchema.parse(json)
@@ -66,7 +66,10 @@ export async function PUT(req: NextRequest, props: RouteProps) {
 
             if (body.tags) {
                 const tagConnects = []
-                for (const tagName of body.tags) {
+                // 去重并过滤空标签
+                const uniqueTags = Array.from(new Set(body.tags.filter(t => t.trim() !== "")))
+                
+                for (const tagName of uniqueTags) {
                      const tag = await tx.tag.upsert({
                         where: { name_userId: { name: tagName, userId: session.user.id } },
                         create: { name: tagName, userId: session.user.id },
@@ -82,10 +85,14 @@ export async function PUT(req: NextRequest, props: RouteProps) {
                 data,
                 include: { tags: true }
             })
+        }, {
+            maxWait: 5000, // default: 2000
+            timeout: 10000, // default: 5000
         })
 
         return apiSuccess(updatedNote)
     } catch (error) {
+        console.error("[NOTE_UPDATE_ERROR]", error)
         return handleApiError(error)
     }
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { NoteEditor } from "@/components/editor/note-editor"
+import { TagInput } from "@/components/ui/tag-input"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,6 +22,7 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
+  const [tags, setTags] = useState<string[]>([])
   
   // 获取笔记详情
   const { data: note, isLoading, isError } = useQuery<Note>({
@@ -38,12 +40,13 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
     if (note) {
       setTitle(note.title)
       setContent(note.content || "")
+      setTags(note.tags?.map(t => t.name) || [])
     }
   }, [note])
 
   // 保存笔记 Mutation
   const saveMutation = useMutation({
-    mutationFn: async (data: { title: string; content: string }) => {
+    mutationFn: async (data: { title: string; content: string; tags: string[] }) => {
       const res = await fetch(`/api/notes/${noteId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -80,9 +83,8 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       }
     },
   })
-
   const handleSave = () => {
-    saveMutation.mutate({ title, content })
+    saveMutation.mutate({ title, content, tags })
   }
 
   if (isLoading) {
@@ -142,14 +144,14 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
         </div>
       </div>
 
-      {/* 标签栏 (预留) */}
-      {note?.tags && note.tags.length > 0 && (
-        <div className="flex gap-2 px-4 py-2 border-b">
-            {note.tags.map(tag => (
-                <Badge key={tag.id} variant="secondary">{tag.name}</Badge>
-            ))}
-        </div>
-      )}
+      {/* 标签栏 */}
+      <div className="px-4 py-2 border-b">
+        <TagInput 
+            value={tags} 
+            onChange={setTags} 
+            placeholder="添加标签..."
+        />
+      </div>
 
       {/* 编辑器区域 */}
       <div className="flex-1 overflow-hidden">

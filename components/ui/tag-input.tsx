@@ -48,11 +48,13 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
   })
 
   const handleSelect = (tagName: string) => {
-    if (!value.includes(tagName)) {
+    if (value.includes(tagName)) {
+      onChange(value.filter((t) => t !== tagName))
+    } else {
       onChange([...value, tagName])
     }
     setInputValue("")
-    setOpen(false)
+    // setOpen(false) // 保持打开状态以便连续选择
   }
 
   const handleRemove = (tagName: string) => {

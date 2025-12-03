@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
     // const limit = parseInt(searchParams.get("limit") || "10")
     // const skip = (page - 1) * limit
 
-    let notes;
+    let notes: ({ tags: { name: string; id: string; color: string | null; userId: string; createdAt: Date }[] } & { id: string; title: string; content: string | null; userId: string; createdAt: Date; updatedAt: Date })[];
 
     // 如果指定了 repositoryId，且不是 "all" (假设前端传 "all" 或不传代表所有)
     if (repositoryId && repositoryId !== "all") {
