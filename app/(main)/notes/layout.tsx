@@ -9,7 +9,7 @@ export default function NotesLayout({
   return (
     <div className="flex h-full">
       {/* 左侧列表 - 在移动端可能需要隐藏或做成抽屉 */}
-      <aside className="w-80 hidden md:block h-full border-r">
+      <aside className="w-80 hidden md:block h-full border-r bg-sidebar text-sidebar-foreground">
         <NoteList />
       </aside>
       
