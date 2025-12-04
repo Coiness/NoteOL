@@ -26,6 +26,7 @@ interface NoteEditorProps {
   readOnly?: boolean
 }
 
+// 工具栏，怎么做到的
 const Toolbar = ({ editor }: { editor: any }) => {
   if (!editor) return null
 
@@ -121,6 +122,8 @@ const Toolbar = ({ editor }: { editor: any }) => {
 }
 
 export function NoteEditor({ value, onChange, readOnly = false }: NoteEditorProps) {
+  // 初始化编辑器
+  // 怎么初始化的，配置了什么
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [

@@ -22,8 +22,9 @@ export function MainNav({
     <NavigationMenu className={className} {...props}>
       <NavigationMenuList>
         <NavigationMenuItem>
-          <Link href="/repositories" legacyBehavior passHref>
-            <NavigationMenuLink
+          <NavigationMenuLink asChild>
+            <Link
+              href="/repositories"
               className={cn(
                 navigationMenuTriggerStyle(),
                 "bg-transparent",
@@ -31,8 +32,8 @@ export function MainNav({
               )}
             >
               我的知识库
-            </NavigationMenuLink>
-          </Link>
+            </Link>
+          </NavigationMenuLink>
         </NavigationMenuItem>
       </NavigationMenuList>
     </NavigationMenu>

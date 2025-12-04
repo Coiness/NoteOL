@@ -70,28 +70,7 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
   }
 
   return (
-    <div className="flex flex-wrap gap-2 items-center">
-      {value.map((tagName) => (
-        <Badge key={tagName} variant={getTagColor(tagName)} className="gap-1 pr-1">
-          {tagName}
-          <button
-            className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                handleRemove(tagName)
-              }
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-            onClick={() => handleRemove(tagName)}
-          >
-            <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-          </button>
-        </Badge>
-      ))}
-      
+    <div className="flex flex-wrap gap-2 items-center"> 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -149,6 +128,27 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
           </Command>
         </PopoverContent>
       </Popover>
+      {value.map((tagName) => (
+        <Badge key={tagName} variant={getTagColor(tagName)} className="gap-1 pr-1">
+          {tagName}
+          <button
+            className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleRemove(tagName)
+              }
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onClick={() => handleRemove(tagName)}
+          >
+            <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+          </button>
+        </Badge>
+      ))}
+
     </div>
   )
 }

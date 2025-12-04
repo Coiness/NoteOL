@@ -1,10 +1,44 @@
-[] 知识库无法删除
-[] 预加载优化
-[] 自动报错
-[] 编辑器样式
-[] 个人页面
-   编辑器里面内容有问题，都是html格式，而且字太大了，它的原理是什么？
-   加载时间太慢
-1. 知识库的编辑窗口，似乎是透明组件，就是那个组件的原因吧。
-2. 知识库创建和编辑时弹出的窗口，都存在透明的问题，其他层级好像都变暗了，但是本应该高亮的窗口也跟着变暗
-3. 知识库无法删除
+## 优先级 1：Bug 修复与核心体验
+[x] 报错：`legacyBehavior` is deprecated (Next.js Link)
+[x] 知识库无法删除
+[] 编辑器样式优化 (Tiptap Typography & Theme)
+
+## 优先级 2：核心交互功能
+[] 自动保存 (Auto-save)
+[] 快捷键支持 (Hotkeys)
+[] 个人页面 (Profile Page)
+
+## 优先级 3：搜索与排序增强
+[] 知识库搜索功能
+[] 知识库按日期排序功能
+[] 笔记列表排序 (Note List Sorting)
+[] 全局搜索栏和搜索页面
+
+## 优先级 4：性能与优化
+[] 预加载优化 (Preloading)
+
+## 错误日志记录
+### Error: legacyBehavior is deprecated
+Console Error
+
+## Error Message
+`legacyBehavior` is deprecated and will be removed in a future release. A codemod is available to upgrade your components:
+
+npx @next/codemod@latest new-link .
+
+Learn more: https://nextjs.org/docs/app/building-your-application/upgrading/codemods#remove-a-tags-from-link-components
+
+
+    at MainNav (components/layout/main-nav.tsx:25:11)
+    at MainLayout (app\(main)\layout.tsx:13:11)
+
+## Code Frame
+  23 |       <NavigationMenuList>
+  24 |         <NavigationMenuItem>
+> 25 |           <Link href="/repositories" legacyBehavior passHref>
+     |           ^
+  26 |             <NavigationMenuLink
+  27 |               className={cn(
+  28 |                 navigationMenuTriggerStyle(),
+
+Next.js version: 16.0.3 (Turbopack)

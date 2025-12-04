@@ -8,10 +8,19 @@ agent: agent
 [x] 3.笔记模块CRUD（前后端已集成）
 [x] 4.知识库分类模块与界面集成
 [x] 5.标签模块与搜索模块
-[] 6.响应式布局与UI优化
-[] 7.查漏补缺
+[x] 6.响应式布局与UI优化
+[] 7.查漏补缺与Bug修复
+    - [ ] 修复知识库无法删除的问题
+    - [ ] 修复 Next.js Link legacyBehavior 报错
+    - [ ] 修复编辑器样式问题
 [] 8.用户交互优化
+    - [ ] 自动保存功能
+    - [ ] 快捷键支持
+    - [ ] 知识库搜索与排序
+    - [ ] 笔记列表排序
+    - [ ] 个人页面开发
 [] 9.性能优化
+    - [ ] 预加载优化
 [] 10.离线编辑功能与本地缓存
 [] 11.同步协同编程
 [] 12.接入AI语义化平台
@@ -72,10 +81,12 @@ React Hook Form + Zod 表单处理与验证
 TanStack Query 服务端状态管理
 
 编辑器方案
-ByteMD Markdown编辑器（SSR友好，开箱即用）
-@bytemd/react React封装
-@bytemd/plugin-gfm GFM扩展支持
-@bytemd/plugin-highlight 代码高亮(还有数学公式和 **mermaid** 渲染插件等)
+Tiptap 无头编辑器（高度可定制，基于ProseMirror）
+@tiptap/react React封装
+@tiptap/starter-kit 基础套件
+@tiptap/extension-placeholder 占位符
+@tiptap/extension-code-block-lowlight 代码高亮
+Tailwind Typography 排版插件
 
 🔧 后端技术栈
 

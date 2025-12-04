@@ -58,12 +58,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["notes"] })
       // 如果在知识库视图，使用 query 参数跳转
-      if (repositoryId) {
-        router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
-      } else {
-        // 兼容旧视图
-        router.push(`/notes/${data.data.id}`)
-      }
+      router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
     },
   })
   // 过滤笔记

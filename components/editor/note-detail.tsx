@@ -45,6 +45,8 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
   }, [note])
 
   // 保存笔记 Mutation
+  // 什么是mutation
+  // useMutation 用于处理会改变数据的操作，比如创建、更新或删除数据。它允许你定义一个异步函数来执行这些操作，并提供状态管理（如加载状态、错误处理等）。
   const saveMutation = useMutation({
     mutationFn: async (data: { title: string; content: string; tags: string[] }) => {
       const res = await fetch(`/api/notes/${noteId}`, {
@@ -56,6 +58,7 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       return res.json()
     },
     onSuccess: () => {
+      // 使缓存失效，确保数据是最新的
       queryClient.invalidateQueries({ queryKey: ["note", noteId] })
       queryClient.invalidateQueries({ queryKey: ["notes"] }) // 刷新列表
       toast.success("笔记已保存")
