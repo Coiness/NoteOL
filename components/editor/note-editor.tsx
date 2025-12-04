@@ -136,7 +136,7 @@ export function NoteEditor({ value, onChange, readOnly = false }: NoteEditorProp
     editable: !readOnly,
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[300px] p-4 max-w-none dark:prose-invert',
+        class: 'prose prose-neutral max-w-none mx-auto focus:outline-none min-h-[300px] p-4 dark:prose-invert font-sans',
       },
     },
     onUpdate: ({ editor }) => {
