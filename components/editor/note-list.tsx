@@ -86,8 +86,8 @@ export function NoteList({ repositoryId }: NoteListProps) {
   })
 
   return (
-    <div className="flex h-full flex-col border-r bg-muted/10">
-      <div className="flex flex-col gap-2 p-4 border-b">
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="flex flex-col gap-2 p-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">笔记列表</h2>
             <Button 
@@ -95,6 +95,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 variant="ghost" 
                 onClick={() => createMutation.mutate()}
                 disabled={createMutation.isPending}
+                className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             >
             {createMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -107,7 +108,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
                 placeholder="搜索笔记 (#标签 或 关键词)" 
-                className="pl-8 h-9"
+                className="pl-8 h-9 bg-background/50 border-sidebar-border focus-visible:ring-sidebar-ring"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -140,8 +141,8 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 key={note.id}
                 href={repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`}
                 className={cn(
-                  "flex flex-col gap-1 p-4 border-b hover:bg-muted/50 transition-colors",
-                  currentNoteId === note.id && "bg-muted"
+                  "flex flex-col gap-1 p-4 border-b border-sidebar-border transition-colors hover:bg-sidebar-accent/50",
+                  currentNoteId === note.id && "bg-sidebar-accent text-sidebar-accent-foreground"
                 )}
               >
                 <div className="font-medium truncate">
