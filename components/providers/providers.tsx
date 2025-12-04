@@ -2,6 +2,7 @@
 
 import { SessionProvider, signOut } from "next-auth/react"
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query"
+import { ThemeProvider } from "next-themes"
 import { ReactNode, useState } from "react"
 import { toast } from "sonner"
 
@@ -41,7 +42,14 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
       </QueryClientProvider>
     </SessionProvider>
   )
