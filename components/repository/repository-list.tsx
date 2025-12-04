@@ -12,6 +12,7 @@ import { zhCN } from "date-fns/locale"
 import { Loader2, Folder, MoreVertical, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -112,7 +113,10 @@ export function RepositoryList() {
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
                   <div 
-                    className="w-3 h-3 rounded-full" 
+                    className={cn(
+                      "w-3 h-3 rounded-full",
+                      repo.isDefault && "dark:bg-white!"
+                    )}
                     style={{ backgroundColor: repo.color || "#94a3b8" }}
                   />
                   <CardTitle className="line-clamp-1">

@@ -4,29 +4,37 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { cn } from "@/lib/utils"
+import {
+  NavigationMenu,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  navigationMenuTriggerStyle,
+} from "@/components/ui/navigation-menu"
 
 export function MainNav({
   className,
   ...props
-}: React.HTMLAttributes<HTMLElement>) {
+}: React.ComponentProps<typeof NavigationMenu>) {
   const pathname = usePathname()
 
   return (
-    <nav
-      className={cn("flex items-center space-x-4 lg:space-x-6", className)}
-      {...props}
-    >
-      <Link
-        href="/repositories"
-        className={cn(
-          "text-sm font-medium transition-colors hover:text-primary",
-          pathname.startsWith("/repositories")
-            ? "text-primary"
-            : "text-muted-foreground"
-        )}
-      >
-        我的知识库
-      </Link>
-    </nav>
+    <NavigationMenu className={className} {...props}>
+      <NavigationMenuList>
+        <NavigationMenuItem>
+          <Link href="/repositories" legacyBehavior passHref>
+            <NavigationMenuLink
+              className={cn(
+                navigationMenuTriggerStyle(),
+                "bg-transparent",
+                pathname.startsWith("/repositories") && "bg-accent text-accent-foreground"
+              )}
+            >
+              我的知识库
+            </NavigationMenuLink>
+          </Link>
+        </NavigationMenuItem>
+      </NavigationMenuList>
+    </NavigationMenu>
   )
 }
