@@ -154,7 +154,7 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       </div>
 
       {/* 编辑器区域 */}
-      <div className="flex-1 overflow-hidden editor-bg">
+      <div className="flex-1 overflow-hidden bg-editor text-editor-foreground">
         <NoteEditor 
             key={noteId}
             value={content} 

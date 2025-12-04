@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Plus, FileText, Loader2, Search } from "lucide-react"
-import { cn, stripHtml } from "@/lib/utils"
+import { cn, stripHtml, getTagColor } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { Note } from "@/types"
@@ -24,8 +24,8 @@ export function NoteList({ repositoryId }: NoteListProps) {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   
-  // 优先使用 URL query 参数中的 noteId，其次是路由参数中的 noteId (兼容旧路由)
-  const currentNoteId = searchParams.get("noteId") || params?.noteId as string
+  // 使用 URL query 参数中的 noteId
+  const currentNoteId = searchParams.get("noteId") 
 
   // 获取笔记列表
   const { data: notes, isLoading } = useQuery<Note[]>({
@@ -149,7 +149,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 </div>
                 <div className="flex gap-1 flex-wrap mb-1">
                     {note.tags?.map(tag => (
-                        <Badge key={tag.id} variant="outline" className="text-[10px] px-1 py-0 h-4">
+                        <Badge key={tag.id} variant={getTagColor(tag.name)} className="text-[10px] px-1 py-0 h-4">
                             #{tag.name}
                         </Badge>
                     ))}

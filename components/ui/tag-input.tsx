@@ -4,7 +4,7 @@ import * as React from "react"
 import { Check, ChevronsUpDown, Plus, X } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
-import { cn } from "@/lib/utils"
+import { cn, getTagColor } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -72,7 +72,7 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
   return (
     <div className="flex flex-wrap gap-2 items-center">
       {value.map((tagName) => (
-        <Badge key={tagName} variant="secondary" className="gap-1 pr-1">
+        <Badge key={tagName} variant={getTagColor(tagName)} className="gap-1 pr-1">
           {tagName}
           <button
             className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"

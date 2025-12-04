@@ -244,51 +244,6 @@
 
 /* <CHANGE> Custom utility classes for the note app */
 @layer utilities {
-  /* Editor-specific background */
-  .editor-bg {
-    background-color: var(--editor);
-    color: var(--editor-foreground);
-  }
-
-  /* Command palette styling */
-  .command-palette {
-    background-color: var(--command);
-    color: var(--command-foreground);
-    border-color: var(--command-border);
-  }
-
-  /* Tag color utilities */
-  .tag-blue {
-    background-color: var(--tag-blue);
-  }
-
-  .tag-green {
-    background-color: var(--tag-green);
-  }
-
-  .tag-orange {
-    background-color: var(--tag-orange);
-  }
-
-  .tag-pink {
-    background-color: var(--tag-pink);
-  }
-
-  .tag-purple {
-    background-color: var(--tag-purple);
-  }
-
-  .tag-yellow {
-    background-color: var(--tag-yellow);
-  }
-
-  /* Sidebar-specific styling */
-  .sidebar-bg {
-    background-color: var(--sidebar);
-    color: var(--sidebar-foreground);
-    border-color: var(--sidebar-border);
-  }
-
   /* Text rendering optimization for better readability */
   .text-optimize {
     text-rendering: optimizeLegibility;
@@ -297,38 +252,4 @@
   }
 }
 
-/* <CHANGE> Component-specific enhancements */
-@layer components {
-  /* Enhanced card styling for auth pages */
-  .auth-card {
-    @apply bg-card border border-border shadow-lg;
-  }
 
-  /* Command item hover effect */
-  [cmdk-item] {
-    @apply cursor-pointer select-none rounded-md transition-colors;
-  }
-
-  [cmdk-item]:hover {
-    @apply bg-accent text-accent-foreground;
-  }
-
-  [cmdk-item][data-selected] {
-    @apply bg-accent text-accent-foreground;
-  }
-
-  /* Badge enhancements for tags */
-  .badge-tag {
-    @apply rounded-md px-2 py-0.5 text-xs font-medium transition-colors;
-  }
-
-  /* Skeleton improvements */
-  .skeleton {
-    @apply animate-pulse bg-muted;
-  }
-
-  /* Smooth transitions for interactive elements */
-  .interactive {
-    @apply transition-all duration-200 ease-in-out;
-  }
-}

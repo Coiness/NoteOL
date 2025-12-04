@@ -28,3 +28,15 @@ export async function fetcher<T = any>(url: string, options?: RequestInit): Prom
   }
   return res.json()
 }
+
+// 预定义标签颜色
+const TAG_COLORS = ['blue', 'green', 'orange', 'pink', 'purple', 'yellow'] as const
+
+export function getTagColor(name: string) {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const index = Math.abs(hash) % TAG_COLORS.length
+  return TAG_COLORS[index]
+}
