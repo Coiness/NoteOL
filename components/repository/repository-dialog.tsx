@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
@@ -57,6 +57,22 @@ export function RepositoryDialog({
       color: repository?.color || "#000000",
     },
   })
+
+  useEffect(() => {
+    if (repository) {
+      form.reset({
+        name: repository.name,
+        description: repository.description || "",
+        color: repository.color || "#000000",
+      })
+    } else {
+      form.reset({
+        name: "",
+        description: "",
+        color: "#000000",
+      })
+    }
+  }, [repository, form])
 
   const mutation = useMutation({
     mutationFn: async (values: RepositoryFormValues) => {
