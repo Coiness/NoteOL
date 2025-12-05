@@ -31,7 +31,8 @@ const TabKeymap = Extension.create({
           return this.editor.commands.sinkListItem('listItem')
         }
         // 否则插入两个空格作为软 Tab
-        return this.editor.commands.insertContent('  ')
+        this.editor.commands.insertContent('  ')
+        return true // 明确返回 true 以阻止默认行为
       },
       'Shift-Tab': () => {
         // 如果在列表中，Shift+Tab 键进行反缩进（取消嵌套）
@@ -165,6 +166,43 @@ export function NoteEditor({ value, onChange, onSave, readOnly = false }: NoteEd
         class: 'prose prose-neutral max-w-none mx-auto focus:outline-none min-h-[300px] p-4 dark:prose-invert font-sans',
       },
       handleKeyDown: (view, event) => {
+        // 监听 Tab 键
+        if (event.key === 'Tab') {
+          event.preventDefault() // 阻止浏览器默认的焦点切换
+          
+          // 获取编辑器实例
+          const { state, dispatch } = view
+          const { selection } = state
+          const { $from } = selection
+
+          // 检查是否在列表中
+          // 这里的逻辑稍微底层一点，通过节点类型判断
+          const isInList = $from.node(-1)?.type.name === 'listItem'
+
+          if (event.shiftKey) {
+            // Shift+Tab: 反缩进
+            if (isInList) {
+              // 调用 Tiptap 的 liftListItem 命令
+              // 由于这里拿不到 editor 实例，我们只能返回 false 让 Tiptap 的 keymap 去处理
+              // 或者我们直接在这里处理，但需要手动构造 transaction，比较麻烦
+              // 既然我们已经在 Extension 里定义了 Shift+Tab，这里返回 false 交给 Extension 处理即可
+              // 但是为了保险，我们还是让 Extension 处理 Shift+Tab，这里只处理 Tab
+              return false 
+            }
+            return false
+          } else {
+            // Tab: 缩进或插入空格
+            if (isInList) {
+              // 列表缩进交给 Extension 处理，或者这里返回 false
+              return false
+            } else {
+              // 普通文本：插入两个空格
+              dispatch(state.tr.insertText('  '))
+              return true
+            }
+          }
+        }
+
         // 监听 Ctrl+S 或 Cmd+S
         if ((event.ctrlKey || event.metaKey) && event.key === 's') {
           event.preventDefault()
