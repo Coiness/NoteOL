@@ -9,11 +9,19 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
-import { Loader2, Folder, MoreVertical, Trash2 } from "lucide-react"
+import { Loader2, Folder, MoreVertical, Trash2, Search } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Card,
   CardContent,
@@ -45,6 +53,8 @@ export function RepositoryList() {
   const queryClient = useQueryClient()
   const [editingRepo, setEditingRepo] = useState<Repository | null>(null)
   const [deletingRepo, setDeletingRepo] = useState<Repository | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortBy, setSortBy] = useState<"updated" | "created" | "name">("updated")
 
   const { data: repositories, isLoading } = useQuery<Repository[]>({
     queryKey: ["repositories"],
@@ -76,6 +86,17 @@ export function RepositoryList() {
     },
   })
 
+  const filteredRepositories = repositories
+    ?.filter(repo => 
+      repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      repo.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name)
+      if (sortBy === "created") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    })
+
   if (isLoading) {
     return (
       <div className="flex h-[200px] items-center justify-center">
@@ -93,6 +114,28 @@ export function RepositoryList() {
         trigger={<span className="hidden" />}
       />
 
+      <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索知识库..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="排序方式" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="updated">最近更新</SelectItem>
+            <SelectItem value="created">创建时间</SelectItem>
+            <SelectItem value="name">名称</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {/* 空状态或添加按钮 */}
         <RepositoryDialog 
@@ -104,7 +147,7 @@ export function RepositoryList() {
           }
         />
         
-        {repositories?.map((repo) => (
+        {filteredRepositories?.map((repo) => (
           <Card key={repo.id} className="group relative hover:shadow-md transition-shadow select-none">
             <Link href={`/repositories/${repo.id}`} className="absolute inset-0 z-10">
               <span className="sr-only">查看 {repo.name}</span>
