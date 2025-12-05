@@ -1,16 +1,15 @@
-"use client"
-
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { NoteEditor } from "@/components/editor/note-editor"
 import { TagInput } from "@/components/ui/tag-input"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Save, Trash2 } from "lucide-react"
+import { Loader2, Save, Trash2, CheckCircle2, Cloud } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Note } from "@/types"
+import { useDebounce } from "@/hooks/use-debounce"
 
 interface NoteDetailProps {
   noteId: string
@@ -24,6 +23,14 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
   const [content, setContent] = useState("")
   const [tags, setTags] = useState<string[]>([])
   
+  // 自动保存防抖
+  const debouncedTitle = useDebounce(title, 1000)
+  const debouncedContent = useDebounce(content, 1000)
+  const debouncedTags = useDebounce(tags, 1000)
+
+  // 记录是否是首次加载，避免首次加载触发自动保存
+  const isFirstLoad = useRef(true)
+
   // 获取笔记详情
   const { data: note, isLoading, isError } = useQuery<Note>({
     queryKey: ["note", noteId],
@@ -41,12 +48,14 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       setTitle(note.title)
       setContent(note.content || "")
       setTags(note.tags?.map(t => t.name) || [])
+      // 数据加载完成后，标记不再是首次加载（稍微延迟一点以确保 debounce 初始值也稳定）
+      setTimeout(() => {
+        isFirstLoad.current = false
+      }, 100)
     }
   }, [note])
 
   // 保存笔记 Mutation
-  // 什么是mutation
-  // useMutation 用于处理会改变数据的操作，比如创建、更新或删除数据。它允许你定义一个异步函数来执行这些操作，并提供状态管理（如加载状态、错误处理等）。
   const saveMutation = useMutation({
     mutationFn: async (data: { title: string; content: string; tags: string[] }) => {
       const res = await fetch(`/api/notes/${noteId}`, {
@@ -58,15 +67,30 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       return res.json()
     },
     onSuccess: () => {
-      // 使缓存失效，确保数据是最新的
+      // 自动保存成功不弹窗，只更新状态
       queryClient.invalidateQueries({ queryKey: ["note", noteId] })
-      queryClient.invalidateQueries({ queryKey: ["notes"] }) // 刷新列表
-      toast.success("笔记已保存")
+      queryClient.invalidateQueries({ queryKey: ["notes"] })
     },
     onError: () => {
-      toast.error("保存失败")
+      toast.error("保存失败，请检查网络")
     },
   })
+
+  // 监听防抖后的值变化，触发自动保存
+  useEffect(() => {
+    if (isFirstLoad.current) return
+    if (!note) return
+
+    // 只有当内容真正改变时才保存（对比当前 note 数据）
+    // 注意：这里简化了对比，实际可能需要更深层的比较，或者直接保存
+    // 为了简单起见，只要 debounced 值变化且不是初始加载，就保存
+    saveMutation.mutate({ 
+      title: debouncedTitle, 
+      content: debouncedContent, 
+      tags: debouncedTags 
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedTitle, debouncedContent, debouncedTags])
 
   // 删除笔记 Mutation
   const deleteMutation = useMutation({
@@ -86,9 +110,6 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       }
     },
   })
-  const handleSave = () => {
-    saveMutation.mutate({ title, content, tags })
-  }
 
   if (isLoading) {
     return (
@@ -119,19 +140,26 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={handleSave}
-            disabled={saveMutation.isPending}
-          >
+          {/* 保存状态指示器 */}
+          <div className="flex items-center text-sm text-muted-foreground mr-2">
             {saveMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <>
+                <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                <span>保存中...</span>
+              </>
+            ) : saveMutation.isError ? (
+              <span className="text-destructive flex items-center">
+                <Cloud className="h-3 w-3 mr-1.5" />
+                保存失败
+              </span>
             ) : (
-              <Save className="h-4 w-4 mr-2" />
+              <span className="flex items-center text-muted-foreground/60">
+                <CheckCircle2 className="h-3 w-3 mr-1.5" />
+                已保存
+              </span>
             )}
-            保存
-          </Button>
+          </div>
+
           <Button 
             variant="ghost" 
             size="icon" 
@@ -162,6 +190,11 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
             key={noteId}
             value={content} 
             onChange={setContent} 
+            onSave={() => {
+              // 手动触发保存（立即保存，不等待防抖）
+              saveMutation.mutate({ title, content, tags })
+              toast.success("已保存")
+            }}
         />
       </div>
     </div>

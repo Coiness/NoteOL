@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, Extension } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Toggle } from "@/components/ui/toggle"
@@ -20,9 +20,34 @@ import {
   Minus 
 } from 'lucide-react'
 
+// 自定义 Tab 键行为扩展
+const TabKeymap = Extension.create({
+  name: 'tabKeymap',
+  addKeyboardShortcuts() {
+    return {
+      'Tab': () => {
+        // 如果在列表中，Tab 键进行缩进（嵌套）
+        if (this.editor.isActive('bulletList') || this.editor.isActive('orderedList')) {
+          return this.editor.commands.sinkListItem('listItem')
+        }
+        // 否则插入两个空格作为软 Tab
+        return this.editor.commands.insertContent('  ')
+      },
+      'Shift-Tab': () => {
+        // 如果在列表中，Shift+Tab 键进行反缩进（取消嵌套）
+        if (this.editor.isActive('bulletList') || this.editor.isActive('orderedList')) {
+          return this.editor.commands.liftListItem('listItem')
+        }
+        return false
+      }
+    }
+  }
+})
+
 interface NoteEditorProps {
   value: string
   onChange: (value: string) => void
+  onSave?: () => void
   readOnly?: boolean
 }
 
@@ -121,7 +146,7 @@ const Toolbar = ({ editor }: { editor: any }) => {
   )
 }
 
-export function NoteEditor({ value, onChange, readOnly = false }: NoteEditorProps) {
+export function NoteEditor({ value, onChange, onSave, readOnly = false }: NoteEditorProps) {
   // 初始化编辑器
   // 怎么初始化的，配置了什么
   const editor = useEditor({
@@ -131,12 +156,24 @@ export function NoteEditor({ value, onChange, readOnly = false }: NoteEditorProp
       Placeholder.configure({
         placeholder: '开始输入内容...',
       }),
+      TabKeymap,
     ],
     content: value,
     editable: !readOnly,
     editorProps: {
       attributes: {
         class: 'prose prose-neutral max-w-none mx-auto focus:outline-none min-h-[300px] p-4 dark:prose-invert font-sans',
+      },
+      handleKeyDown: (view, event) => {
+        // 监听 Ctrl+S 或 Cmd+S
+        if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+          event.preventDefault()
+          if (onSave) {
+            onSave()
+          }
+          return true
+        }
+        return false
       },
     },
     onUpdate: ({ editor }) => {
