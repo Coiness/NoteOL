@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { signOut, useSession } from "next-auth/react"
 import { useQueryClient } from "@tanstack/react-query"
+import Link from "next/link"
 
 export function UserNav() {
   const { data: session } = useSession()
@@ -42,7 +43,13 @@ export function UserNav() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout}>
+        <DropdownMenuItem asChild>
+          <Link href="/settings" className="cursor-pointer">
+            设置
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
           退出登录
         </DropdownMenuItem>
       </DropdownMenuContent>

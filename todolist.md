@@ -4,8 +4,8 @@
 [x] 编辑器样式优化 (Tiptap Typography & Theme)
 
 ## 优先级 2：核心交互功能
-[] 自动保存 (Auto-save)
-[] 快捷键支持 (Hotkeys)
+[x] 自动保存 (Auto-save)
+[x] 快捷键支持 (Hotkeys)
 [] 个人页面 (Profile Page)
 
 ## 优先级 3：搜索与排序增强

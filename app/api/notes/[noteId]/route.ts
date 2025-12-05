@@ -62,7 +62,12 @@ export async function PUT(req: NextRequest, props: RouteProps) {
                 updatedAt: new Date()
             }
             if (body.title !== undefined) data.title = body.title
-            if (body.content !== undefined) data.content = body.content
+            if (body.content !== undefined) {
+                data.content = body.content
+                // 简单的字数统计：去除 HTML 标签后计算长度
+                const textContent = body.content.replace(/<[^>]*>/g, '') || ''
+                data.wordCount = textContent.length
+            }
 
             if (body.tags) {
                 const tagConnects = []
