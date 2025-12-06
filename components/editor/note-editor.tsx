@@ -1,237 +1,207 @@
-"use client"
+﻿"use client"
 
-import { useEffect } from 'react'
-import { useEditor, EditorContent, Extension } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Placeholder from '@tiptap/extension-placeholder'
-import { Toggle } from "@/components/ui/toggle"
-import { Separator } from "@/components/ui/separator"
-import { 
-  Bold, 
-  Italic, 
-  Strikethrough, 
-  Code, 
-  Heading1, 
-  Heading2, 
-  Heading3, 
-  List, 
-  ListOrdered, 
-  Quote, 
-  Minus 
-} from 'lucide-react'
+import { useEditor, EditorContent } from "@tiptap/react"
+import StarterKit from "@tiptap/starter-kit"
+import Image from "@tiptap/extension-image"
+import Link from "@tiptap/extension-link"
+import TaskList from "@tiptap/extension-task-list"
+import TaskItem from "@tiptap/extension-task-item"
+import { Table } from "@tiptap/extension-table"
+import TableRow from "@tiptap/extension-table-row"
+import TableCell from "@tiptap/extension-table-cell"
+import TableHeader from "@tiptap/extension-table-header"
+import Highlight from "@tiptap/extension-highlight"
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
+import { common, createLowlight } from "lowlight"
+import Collaboration from "@tiptap/extension-collaboration"
+import CollaborationCursor from "@tiptap/extension-collaboration-cursor"
+import * as Y from "yjs"
+import { WebsocketProvider } from "y-websocket"
+import { IndexeddbPersistence } from "y-indexeddb"
+import { useSession } from "next-auth/react"
+import randomColor from "randomcolor"
+import { useEffect, useState } from "react"
+import { Loader2, Wifi, WifiOff } from "lucide-react"
+import { toast } from "sonner"
 
-// 自定义 Tab 键行为扩展
-const TabKeymap = Extension.create({
-  name: 'tabKeymap',
-  addKeyboardShortcuts() {
-    return {
-      'Tab': () => {
-        // 如果在列表中，Tab 键进行缩进（嵌套）
-        if (this.editor.isActive('bulletList') || this.editor.isActive('orderedList')) {
-          return this.editor.commands.sinkListItem('listItem')
-        }
-        // 否则插入两个空格作为软 Tab
-        this.editor.commands.insertContent('  ')
-        return true // 明确返回 true 以阻止默认行为
-      },
-      'Shift-Tab': () => {
-        // 如果在列表中，Shift+Tab 键进行反缩进（取消嵌套）
-        if (this.editor.isActive('bulletList') || this.editor.isActive('orderedList')) {
-          return this.editor.commands.liftListItem('listItem')
-        }
-        return false
-      }
-    }
-  }
-})
+import { Note } from "@/types"
+import { cn } from "@/lib/utils"
+import { EditorToolbar } from "./editor-toolbar"
+import { TabKeymap } from "./extensions/tab-keymap"
 
-interface NoteEditorProps {
-  value: string
-  onChange: (value: string) => void
-  onSave?: () => void
-  readOnly?: boolean
+const lowlight = createLowlight(common)
+
+interface TiptapEditorProps {
+  yDoc: Y.Doc
+  provider: WebsocketProvider | null
+  readOnly: boolean
+  session: any
 }
 
-// 工具栏，怎么做到的
-const Toolbar = ({ editor }: { editor: any }) => {
-  if (!editor) return null
-
-  return (
-    <div className="border-b p-2 flex flex-wrap gap-1 items-center bg-background sticky top-0 z-10">
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('bold')}
-        onPressedChange={() => editor.chain().focus().toggleBold().run()}
-      >
-        <Bold className="h-4 w-4" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('italic')}
-        onPressedChange={() => editor.chain().focus().toggleItalic().run()}
-      >
-        <Italic className="h-4 w-4" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('strike')}
-        onPressedChange={() => editor.chain().focus().toggleStrike().run()}
-      >
-        <Strikethrough className="h-4 w-4" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('code')}
-        onPressedChange={() => editor.chain().focus().toggleCode().run()}
-      >
-        <Code className="h-4 w-4" />
-      </Toggle>
-      
-      <Separator orientation="vertical" className="h-6 mx-1" />
-      
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('heading', { level: 1 })}
-        onPressedChange={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-      >
-        <Heading1 className="h-4 w-4" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('heading', { level: 2 })}
-        onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-      >
-        <Heading2 className="h-4 w-4" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('heading', { level: 3 })}
-        onPressedChange={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-      >
-        <Heading3 className="h-4 w-4" />
-      </Toggle>
-      
-      <Separator orientation="vertical" className="h-6 mx-1" />
-      
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('bulletList')}
-        onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
-      >
-        <List className="h-4 w-4" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('orderedList')}
-        onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
-      >
-        <ListOrdered className="h-4 w-4" />
-      </Toggle>
-      
-      <Separator orientation="vertical" className="h-6 mx-1" />
-      
-      <Toggle
-        size="sm"
-        pressed={editor.isActive('blockquote')}
-        onPressedChange={() => editor.chain().focus().toggleBlockquote().run()}
-      >
-        <Quote className="h-4 w-4" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        onPressedChange={() => editor.chain().focus().setHorizontalRule().run()}
-      >
-        <Minus className="h-4 w-4" />
-      </Toggle>
-    </div>
-  )
-}
-
-export function NoteEditor({ value, onChange, onSave, readOnly = false }: NoteEditorProps) {
-  // 初始化编辑器
-  // 怎么初始化的，配置了什么
+function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit,
-      Placeholder.configure({
-        placeholder: '开始输入内容...',
+      StarterKit.configure({
+        // @ts-ignore
+        history: false, // ⚠️ 必须禁用自带历史记录，交给 Y.js
+      }),
+      Image,
+      Link.configure({
+        openOnClick: false,
+      }),
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Highlight,
+      CodeBlockLowlight.configure({
+        lowlight,
       }),
       TabKeymap,
+      // 协同扩展
+      Collaboration.configure({
+        document: yDoc,
+      }),
+      // 光标扩展
+      ...(provider
+        ? [
+            CollaborationCursor.configure({
+              provider: provider,
+              user: {
+                name: session?.user?.name || "Anonymous",
+                color: randomColor({ luminosity: "dark" }),
+              },
+            }),
+          ]
+        : []),
     ],
-    content: value,
-    editable: !readOnly,
     editorProps: {
       attributes: {
-        class: 'prose prose-neutral max-w-none mx-auto focus:outline-none min-h-[300px] p-4 dark:prose-invert font-sans',
-      },
-      handleKeyDown: (view, event) => {
-        // 监听 Tab 键
-        if (event.key === 'Tab') {
-          event.preventDefault() // 阻止浏览器默认的焦点切换
-          
-          // 获取编辑器实例
-          const { state, dispatch } = view
-          const { selection } = state
-          const { $from } = selection
-
-          // 检查是否在列表中
-          // 这里的逻辑稍微底层一点，通过节点类型判断
-          const isInList = $from.node(-1)?.type.name === 'listItem'
-
-          if (event.shiftKey) {
-            // Shift+Tab: 反缩进
-            if (isInList) {
-              // 调用 Tiptap 的 liftListItem 命令
-              // 由于这里拿不到 editor 实例，我们只能返回 false 让 Tiptap 的 keymap 去处理
-              // 或者我们直接在这里处理，但需要手动构造 transaction，比较麻烦
-              // 既然我们已经在 Extension 里定义了 Shift+Tab，这里返回 false 交给 Extension 处理即可
-              // 但是为了保险，我们还是让 Extension 处理 Shift+Tab，这里只处理 Tab
-              return false 
-            }
-            return false
-          } else {
-            // Tab: 缩进或插入空格
-            if (isInList) {
-              // 列表缩进交给 Extension 处理，或者这里返回 false
-              return false
-            } else {
-              // 普通文本：插入两个空格
-              dispatch(state.tr.insertText('  '))
-              return true
-            }
-          }
-        }
-
-        // 监听 Ctrl+S 或 Cmd+S
-        if ((event.ctrlKey || event.metaKey) && event.key === 's') {
-          event.preventDefault()
-          if (onSave) {
-            onSave()
-          }
-          return true
-        }
-        return false
+        class: "prose prose-stone dark:prose-invert max-w-none focus:outline-none min-h-[500px] px-8 py-6",
       },
     },
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML())
-    },
+    editable: !readOnly,
   })
 
-  // 监听外部 value 变化，更新编辑器内容
-  useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value)
-    }
-  }, [value, editor])
+  if (!editor) {
+    return (
+      <div className="flex h-[500px] items-center justify-center text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
+  }
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-card">
-      {!readOnly && <Toolbar editor={editor} />}
-      <div className="flex-1 overflow-y-auto">
+    <>
+      <EditorToolbar editor={editor} />
+      <div className="min-h-[500px]">
         <EditorContent editor={editor} />
       </div>
+    </>
+  )
+}
+
+interface NoteEditorProps {
+  note: Note
+  readOnly?: boolean
+}
+
+export function NoteEditor({ note, readOnly = false }: NoteEditorProps) {
+  const { data: session } = useSession()
+  const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("connecting")
+  const [provider, setProvider] = useState<WebsocketProvider | null>(null)
+
+  // 初始化 Y.js 文档
+  const [yDoc] = useState(() => new Y.Doc())
+
+  useEffect(() => {
+    let wsProvider: WebsocketProvider | null = null
+    let indexeddbProvider: IndexeddbPersistence | null = null
+
+    const init = async () => {
+      // 1. 离线存储 (立即生效)
+      // 使用 _v2 后缀强制重置本地缓存，避免旧数据导致的解码错误
+      indexeddbProvider = new IndexeddbPersistence(note.id + '_v2', yDoc)
+      
+      indexeddbProvider.on('synced', () => {
+        console.log('Content loaded from IndexedDB')
+      })
+
+      // 2. 获取 Token 并连接 WebSocket
+      try {
+        const res = await fetch('/api/collaboration/auth')
+        if (!res.ok) throw new Error('Failed to get auth token')
+        const { token } = await res.json()
+
+        // 连接 WebSocket 服务
+        wsProvider = new WebsocketProvider(
+          'ws://localhost:1234',
+          note.id,
+          yDoc,
+          { params: { token } }
+        )
+
+        wsProvider.on('status', (event: { status: "connecting" | "connected" | "disconnected" }) => {
+          setStatus(event.status)
+        })
+
+        setProvider(wsProvider)
+      } catch (error) {
+        console.error('Failed to connect to collaboration server:', error)
+        setStatus('disconnected')
+        toast.error("连接协作服务失败，将仅在本地保存")
+      }
+    }
+
+    init()
+
+    return () => {
+      if (wsProvider) wsProvider.destroy()
+      if (indexeddbProvider) indexeddbProvider.destroy()
+    }
+  }, [note.id, yDoc])
+
+  return (
+    <div className="relative w-full max-w-4xl mx-auto border rounded-lg shadow-sm bg-card">
+      {/* 状态指示器 */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-2 px-2 py-1 text-xs rounded-full bg-background/80 backdrop-blur border shadow-sm">
+        {status === 'connected' ? (
+          <>
+            <div className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="text-muted-foreground">已连接</span>
+          </>
+        ) : status === 'connecting' ? (
+          <>
+            <Loader2 className="w-3 h-3 animate-spin text-yellow-500" />
+            <span className="text-muted-foreground">连接中...</span>
+          </>
+        ) : (
+          <>
+            <WifiOff className="w-3 h-3 text-red-500" />
+            <span className="text-muted-foreground">离线模式</span>
+          </>
+        )}
+      </div>
+
+      {/* 
+        使用 key 强制重新挂载编辑器组件
+        当 provider 从 null 变为有值时，组件会销毁并重建
+        这确保了 CollaborationCursor 扩展是在一个干净的环境中初始化的
+      */}
+      <TiptapEditor 
+        key={provider ? 'online' : 'offline'}
+        yDoc={yDoc}
+        provider={provider}
+        readOnly={readOnly}
+        session={session}
+      />
     </div>
   )
 }

@@ -1,11 +1,12 @@
+"use client"
+
 import { useState, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { NoteEditor } from "@/components/editor/note-editor"
 import { TagInput } from "@/components/ui/tag-input"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Loader2, Save, Trash2, CheckCircle2, Cloud } from "lucide-react"
+import { Loader2, Trash2, CheckCircle2, Cloud } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Note } from "@/types"
@@ -20,12 +21,10 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [title, setTitle] = useState("")
-  const [content, setContent] = useState("")
   const [tags, setTags] = useState<string[]>([])
   
   // 自动保存防抖
   const debouncedTitle = useDebounce(title, 1000)
-  const debouncedContent = useDebounce(content, 1000)
   const debouncedTags = useDebounce(tags, 1000)
 
   // 记录是否是首次加载，避免首次加载触发自动保存
@@ -46,18 +45,17 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
   useEffect(() => {
     if (note) {
       setTitle(note.title)
-      setContent(note.content || "")
       setTags(note.tags?.map(t => t.name) || [])
-      // 数据加载完成后，标记不再是首次加载（稍微延迟一点以确保 debounce 初始值也稳定）
+      // 数据加载完成后，标记不再是首次加载
       setTimeout(() => {
         isFirstLoad.current = false
       }, 100)
     }
   }, [note])
 
-  // 保存笔记 Mutation
+  // 保存笔记 Mutation (仅保存标题和标签)
   const saveMutation = useMutation({
-    mutationFn: async (data: { title: string; content: string; tags: string[] }) => {
+    mutationFn: async (data: { title: string; tags: string[] }) => {
       const res = await fetch(`/api/notes/${noteId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -67,7 +65,6 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       return res.json()
     },
     onSuccess: () => {
-      // 自动保存成功不弹窗，只更新状态
       queryClient.invalidateQueries({ queryKey: ["note", noteId] })
       queryClient.invalidateQueries({ queryKey: ["notes"] })
     },
@@ -81,16 +78,13 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
     if (isFirstLoad.current) return
     if (!note) return
 
-    // 只有当内容真正改变时才保存（对比当前 note 数据）
-    // 注意：这里简化了对比，实际可能需要更深层的比较，或者直接保存
-    // 为了简单起见，只要 debounced 值变化且不是初始加载，就保存
+    // 只有当标题或标签改变时才保存
     saveMutation.mutate({ 
       title: debouncedTitle, 
-      content: debouncedContent, 
       tags: debouncedTags 
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedTitle, debouncedContent, debouncedTags])
+  }, [debouncedTitle, debouncedTags])
 
   // 删除笔记 Mutation
   const deleteMutation = useMutation({
@@ -106,7 +100,7 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       if (onDeleteSuccess) {
         onDeleteSuccess()
       } else {
-        router.push("/notes") // 返回列表页或首页
+        router.push("/notes")
       }
     },
   })
@@ -119,7 +113,7 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
     )
   }
 
-  if (isError) {
+  if (isError || !note) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         无法加载笔记
@@ -188,13 +182,7 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       <div className="flex-1 overflow-hidden bg-editor text-editor-foreground">
         <NoteEditor 
             key={noteId}
-            value={content} 
-            onChange={setContent} 
-            onSave={() => {
-              // 手动触发保存（立即保存，不等待防抖）
-              saveMutation.mutate({ title, content, tags })
-              toast.success("已保存")
-            }}
+            note={note}
         />
       </div>
     </div>

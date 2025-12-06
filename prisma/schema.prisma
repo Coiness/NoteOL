@@ -83,6 +83,7 @@ model Note {
   id        String   @id @default(cuid())
   title     String
   content   String?  @db.Text
+  yjsState  Bytes?   // Y.js 二进制状态
   wordCount Int      @default(0) // 字数统计
   userId    String   // 所有者
   createdAt DateTime @default(now())

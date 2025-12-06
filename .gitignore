@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# collaboration service
+NoteOL-ws/node_modules
+NoteOL-ws/dist
+NoteOL-ws/.env
