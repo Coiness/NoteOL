@@ -16,7 +16,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json()
-    const { noteId, content, yjsState } = body
+    const { noteId, content, yjsState, title } = body
 
     if (!noteId || !yjsState) {
       return new NextResponse("Missing required fields", { status: 400 })
@@ -26,14 +26,22 @@ export async function POST(req: Request) {
     // 计算字数 (简单估算)
     const wordCount = content ? content.replace(/<[^>]*>/g, '').length : 0
 
+    // 构建更新数据
+    const updateData: any = {
+      content: content, // HTML
+      yjsState: Buffer.from(yjsState, 'base64'), // 还原为 Bytes
+      wordCount: wordCount,
+      updatedAt: new Date(),
+    }
+
+    // 如果有标题，也更新标题
+    if (title) {
+      updateData.title = title
+    }
+
     await prisma.note.update({
       where: { id: noteId },
-      data: {
-        content: content, // HTML
-        yjsState: Buffer.from(yjsState, 'base64'), // 还原为 Bytes
-        wordCount: wordCount,
-        updatedAt: new Date(),
-      },
+      data: updateData,
     })
 
     return NextResponse.json({ success: true })

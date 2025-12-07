@@ -17,12 +17,9 @@ import Collaboration from "@tiptap/extension-collaboration"
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor"
 import * as Y from "yjs"
 import { HocuspocusProvider } from "@hocuspocus/provider"
-import { IndexeddbPersistence } from "y-indexeddb"
 import { useSession } from "next-auth/react"
 import randomColor from "randomcolor"
-import { useEffect, useState } from "react"
 import { Loader2, Wifi, WifiOff } from "lucide-react"
-import { toast } from "sonner"
 
 import { Note } from "@/types"
 import { cn } from "@/lib/utils"
@@ -111,93 +108,13 @@ function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) 
 interface NoteEditorProps {
   note: Note
   readOnly?: boolean
+  yDoc: Y.Doc
+  provider: HocuspocusProvider | null
+  status: "connecting" | "connected" | "disconnected"
 }
 
-export function NoteEditor({ note, readOnly = false }: NoteEditorProps) {
+export function NoteEditor({ note, readOnly = false, yDoc, provider, status }: NoteEditorProps) {
   const { data: session } = useSession()
-  const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("connecting")
-  const [provider, setProvider] = useState<HocuspocusProvider | null>(null)
-
-  // 初始化 Y.js 文档
-  // 使用 useState 确保 yDoc 在组件生命周期内保持稳定
-  // 注意：由于 NoteDetail 已经给 NoteEditor 加了 key={noteId}，
-  // 所以当 noteId 变化时，整个组件会重新挂载，yDoc 也会重新创建。
-  const [yDoc] = useState(() => new Y.Doc())
-
-  useEffect(() => {
-    let wsProvider: HocuspocusProvider | null = null
-    let indexeddbProvider: IndexeddbPersistence | null = null
-
-    const init = async () => {
-      // 1. 离线存储 (立即生效)
-      // 使用 _v2 后缀强制重置本地缓存，避免旧数据导致的解码错误
-      try {
-        indexeddbProvider = new IndexeddbPersistence(note.id + '_v2', yDoc)
-
-        indexeddbProvider.on('synced', () => {
-          console.log('Content loaded from IndexedDB')
-        })
-      } catch (err) {
-        // 捕获可能的 IndexedDB / Y.js 解码错误（例如 "Unexpected end of array"）
-        // 这种错误通常表示本地存储的数据已损坏或与当前 Y.js 版本不兼容。
-        console.error('[IndexedDB] failed to initialize IndexeddbPersistence', err)
-
-        // 尝试删除 yjs IndexedDB 数据库，清理脏数据后再继续（这是有副作用的，会清空本地协同缓存）
-        try {
-          if (typeof indexedDB !== 'undefined') {
-            // 数据库名由 y-indexeddb 使用，通常为 'yjs'
-            const delReq = indexedDB.deleteDatabase('yjs')
-            delReq.onsuccess = () => console.info('[IndexedDB] deleted yjs database')
-            delReq.onerror = (e) => console.warn('[IndexedDB] delete database error', e)
-            delReq.onblocked = () => console.warn('[IndexedDB] delete blocked')
-          }
-        } catch (e) {
-          console.warn('[IndexedDB] failed to delete database', e)
-        }
-
-        // 继续，不使用 indexeddbProvider（应用仍能以在线/内存模式工作）
-        indexeddbProvider = null
-      }
-
-      // 2. 获取 Token 并连接 WebSocket
-      try {
-        const res = await fetch('/api/collaboration/auth')
-        if (!res.ok) throw new Error('Failed to get auth token')
-        const { token } = await res.json()
-
-        // 连接 WebSocket 服务
-        wsProvider = new HocuspocusProvider({
-          url: 'ws://localhost:1234',
-          name: note.id,
-          document: yDoc,
-          token,
-          onStatus: (data) => {
-            setStatus(data.status)
-          },
-        })
-
-        setProvider(wsProvider)
-      } catch (error) {
-        console.error('Failed to connect to collaboration server:', error)
-        setStatus('disconnected')
-        toast.error("连接协作服务失败，将仅在本地保存")
-      }
-    }
-
-    init()
-
-    return () => {
-      if (wsProvider) wsProvider.destroy()
-      if (indexeddbProvider) indexeddbProvider.destroy()
-    }
-  }, [note.id, yDoc])
-
-  // 组件卸载时销毁 yDoc
-  useEffect(() => {
-    return () => {
-      yDoc.destroy()
-    }
-  }, [yDoc])
 
   return (
     <div className="relative w-full max-w-4xl mx-auto border rounded-lg shadow-sm bg-card">

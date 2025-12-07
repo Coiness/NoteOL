@@ -11,6 +11,9 @@ import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Note } from "@/types"
 import { useDebounce } from "@/hooks/use-debounce"
+import * as Y from "yjs"
+import { HocuspocusProvider } from "@hocuspocus/provider"
+import { IndexeddbPersistence } from "y-indexeddb"
 
 interface NoteDetailProps {
   noteId: string
@@ -23,8 +26,12 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
   const [title, setTitle] = useState("")
   const [tags, setTags] = useState<string[]>([])
   
+  // Y.js State
+  const [yDoc] = useState(() => new Y.Doc())
+  const [provider, setProvider] = useState<HocuspocusProvider | null>(null)
+  const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("connecting")
+
   // 自动保存防抖
-  const debouncedTitle = useDebounce(title, 1000)
   const debouncedTags = useDebounce(tags, 1000)
 
   // 记录是否是首次加载，避免首次加载触发自动保存
@@ -41,21 +48,116 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
     },
   })
 
-  // 初始化本地状态
+  // 初始化 Y.js Provider
+  useEffect(() => {
+    let wsProvider: HocuspocusProvider | null = null
+    let indexeddbProvider: IndexeddbPersistence | null = null
+
+    const init = async () => {
+      // 1. 离线存储 (立即生效)
+      try {
+        indexeddbProvider = new IndexeddbPersistence(noteId + '_v2', yDoc)
+        indexeddbProvider.on('synced', () => {
+          console.log('Content loaded from IndexedDB')
+        })
+      } catch (err) {
+        console.error('[IndexedDB] failed to initialize', err)
+        // 尝试清理
+        try {
+            if (typeof indexedDB !== 'undefined') {
+                indexedDB.deleteDatabase('yjs')
+            }
+        } catch (e) {}
+        indexeddbProvider = null
+      }
+
+      // 2. 获取 Token 并连接 WebSocket
+      try {
+        const res = await fetch('/api/collaboration/auth')
+        if (!res.ok) throw new Error('Failed to get auth token')
+        const { token } = await res.json()
+
+        wsProvider = new HocuspocusProvider({
+          url: 'ws://localhost:1234',
+          name: noteId,
+          document: yDoc,
+          token,
+          onStatus: (data) => {
+            setStatus(data.status)
+          },
+        })
+
+        setProvider(wsProvider)
+      } catch (error) {
+        console.error('Failed to connect to collaboration server:', error)
+        setStatus('disconnected')
+        toast.error("连接协作服务失败，将仅在本地保存")
+      }
+    }
+
+    init()
+
+    return () => {
+      if (wsProvider) wsProvider.destroy()
+      if (indexeddbProvider) indexeddbProvider.destroy()
+    }
+  }, [noteId, yDoc])
+
+  // 监听 Y.js 标题变化
+  useEffect(() => {
+    const yTitle = yDoc.getText('title')
+    
+    const observer = () => {
+      setTitle(yTitle.toString())
+    }
+    
+    yTitle.observe(observer)
+    
+    // 初始值同步
+    if (yTitle.length > 0) {
+        setTitle(yTitle.toString())
+    }
+
+    return () => yTitle.unobserve(observer)
+  }, [yDoc])
+
+  // 初始化本地状态 (从 API 获取的数据)
   useEffect(() => {
     if (note) {
-      setTitle(note.title)
+      // 如果 Y.js 标题为空，且 API 有标题，则初始化 Y.js
+      // 这通常发生在首次加载且本地/远程没有 Y.js 数据时
+      const yTitle = yDoc.getText('title')
+      if (yTitle.length === 0 && note.title) {
+          yDoc.transact(() => {
+              yTitle.insert(0, note.title)
+          })
+      }
+      
       setTags(note.tags?.map(t => t.name) || [])
-      // 数据加载完成后，标记不再是首次加载
+      
       setTimeout(() => {
         isFirstLoad.current = false
       }, 100)
     }
-  }, [note])
+  }, [note, yDoc])
 
-  // 保存笔记 Mutation (仅保存标题和标签)
+  // 处理标题变更
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newTitle = e.target.value
+      setTitle(newTitle)
+      
+      const yTitle = yDoc.getText('title')
+      if (yTitle.toString() !== newTitle) {
+          yDoc.transact(() => {
+              yTitle.delete(0, yTitle.length)
+              yTitle.insert(0, newTitle)
+          })
+      }
+  }
+
+  // 保存笔记 Mutation (仅保存标签，标题通过 Y.js -> Webhook 保存)
   const saveMutation = useMutation({
-    mutationFn: async (data: { title: string; tags: string[] }) => {
+    mutationFn: async (data: { tags: string[] }) => {
       const res = await fetch(`/api/notes/${noteId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -73,18 +175,16 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
     },
   })
 
-  // 监听防抖后的值变化，触发自动保存
+  // 监听防抖后的值变化，触发自动保存 (仅标签)
   useEffect(() => {
     if (isFirstLoad.current) return
     if (!note) return
 
-    // 只有当标题或标签改变时才保存
     saveMutation.mutate({ 
-      title: debouncedTitle, 
       tags: debouncedTags 
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedTitle, debouncedTags])
+  }, [debouncedTags])
 
   // 删除笔记 Mutation
   const deleteMutation = useMutation({
@@ -128,7 +228,7 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
         <div className="flex-1 mr-4">
           <Input
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={handleTitleChange}
             className="text-lg font-bold border-none shadow-none focus-visible:ring-0 px-0"
             placeholder="无标题笔记"
           />
@@ -183,6 +283,9 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
         <NoteEditor 
             key={noteId}
             note={note}
+            yDoc={yDoc}
+            provider={provider}
+            status={status}
         />
       </div>
     </div>
