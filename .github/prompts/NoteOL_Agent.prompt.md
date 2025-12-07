@@ -17,49 +17,48 @@
 
 下面是目录结构
 NoteOL/
-NoteOL-ws/ # [新增] 独立的 WebSocket 协作服务
-src/
-package.json
-tsconfig.json
-app/
-(auth)/ # 认证路由组
-login/
-page.tsx
-register/
-page.tsx
-(main)/ # 主业务路由组
-layout.tsx
-notes/
-layout.tsx
-page.tsx
-[noteId]/
-page.tsx
-repositories/
-page.tsx
-[repoId]/
-page.tsx
-api/ # API 路由
-collaboration/ # [新增] 协作鉴权
-webhooks/ # [新增] 持久化 Webhook
-error.tsx # 全局错误 UI
-globals.css
-layout.tsx
-not-found.tsx # 全局 404 UI
-page.tsx
-components/
-auth/ # 认证组件
-editor/ # 编辑器组件
-layout/ # 布局组件
-providers/ # 全局 Providers
-repository/ # 知识库组件
-ui/ # shadcn/ui 组件
-hooks/ # 自定义 Hooks
-lib/ # 工具函数与配置
-mocks/ # 测试 Mock 数据
-prisma/ # 数据库模型
-store/ # Zustand 状态管理
-types/ # TS 类型定义
-...配置文件
+├── src/
+├── package.json
+├── tsconfig.json
+├── app/
+│ ├── (auth)/ # 认证路由组
+│ │ ├── login/
+│ │ │ └── page.tsx
+│ │ └── register/
+│ │ └── page.tsx
+│ ├── (main)/ # 主业务路由组
+│ │ ├── layout.tsx
+│ │ ├── notes/
+│ │ │ ├── layout.tsx
+│ │ │ ├── page.tsx
+│ │ │ └── [noteId]/
+│ │ │ └── page.tsx
+│ │ ├── repositories/
+│ │ │ ├── page.tsx
+│ │ │ └── [repoId]/
+│ │ │ └── page.tsx
+│ │ ├── api/ # API 路由
+│ │ │ ├── collaboration/ # [新增] 协作鉴权
+│ │ │ └── webhooks/ # [新增] 持久化 Webhook
+│ │ ├── error.tsx # 全局错误 UI
+│ │ ├── globals.css
+│ │ ├── layout.tsx
+│ │ ├── not-found.tsx # 全局 404 UI
+│ │ └── page.tsx
+├── components/
+│ ├── auth/ # 认证组件
+│ ├── editor/ # 编辑器组件
+│ ├── layout/ # 布局组件
+│ ├── providers/ # 全局 Providers
+│ ├── repository/ # 知识库组件
+│ ├── ui/ # shadcn/ui 组件
+│ ├── hooks/ # 自定义 Hooks
+│ ├── lib/ # 工具函数与配置
+│ ├── mocks/ # 测试 Mock 数据
+│ ├── prisma/ # 数据库模型
+│ ├── store/ # Zustand 状态管理
+│ └── types/ # TS 类型定义
+└── ...配置文件
 
 技术栈如下，不过可能存在还没有安装和配置的技术栈，你可以参考一下
 

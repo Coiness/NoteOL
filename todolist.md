@@ -1,19 +1,51 @@
-## 优先级 1：Bug 修复与核心体验
-[x] 报错：`legacyBehavior` is deprecated (Next.js Link)
-[x] 知识库无法删除
-[x] 编辑器样式优化 (Tiptap Typography & Theme)
+# Todo List
 
-## 优先级 2：核心交互功能
-[x] 自动保存 (Auto-save)
-[x] 快捷键支持 (Hotkeys)
-[x] 个人页面 (Profile Page)
+## 优先级 1：协同与权限系统 (Collaboration & Auth)
 
-## 优先级 3：搜索与排序增强
-[x] 知识库搜索功能
-[x] 知识库按日期排序功能
-[] 笔记列表排序 (Note List Sorting)
-[] 全局搜索栏和搜索页面
+- [ ] **分享链接与鉴权**：生成分享链接，验证访问权限。
+- [ ] **权限管理面板**：管理笔记属性与用户权限。
+- [ ] **细粒度权限控制 (RBAC)**：
+  - [ ] Owner：完全控制（分享、修改所有权限）。
+  - [ ] Admin：可分享、修改读写权限。
+  - [ ] Editor：仅编辑。
+  - [ ] Viewer：仅查看。
+  - [ ] No Access：拒绝访问。
+- [ ] **实时协作者统计**：在标题旁显示当前在线用户数/头像。
 
-## 优先级 4：性能与优化
-[] 预加载优化 (Preloading)
+## 优先级 2：编辑器体验优化 (Editor UX)
 
+- [ ] **滚动修复**：解决编辑区域无法滚动的问题。
+- [ ] **布局优化**：
+  - [ ] 底部留白 (Padding bottom)。
+  - [ ] 边框与容器调整 (去除两侧奇怪间距，优化居中体验)。
+- [ ] **Slash 命令菜单**：实现 `/` 唤起快捷菜单，替代/隐藏顶部固定工具栏。
+- [ ] **快捷键拦截**：拦截 `Ctrl+S` 触发应用内保存。
+- [ ] **大纲/目录 (TOC)**：基于标题自动生成，支持折叠。
+
+## 优先级 3：导航与组织 (Navigation & Organization)
+
+- [ ] **笔记列表排序**：支持多种排序方式。
+- [ ] **快速添加笔记**：基于搜索页面的快速归档/添加功能。
+- [ ] **列表交互优化**：
+  - [ ] 列表可折叠。
+  - [ ] 移动端适配 (Mobile responsive)。
+- [ ] **全局搜索**：全局搜索页面与组件。
+
+## 优先级 4：高级功能与性能 (Advanced & Performance)
+
+- [ ] **历史记录**：版本回溯功能。
+- [ ] **离线与预加载**：
+  - [ ] 利用 IndexedDB 缓存笔记标题、知识库属性。
+  - [ ] 弱网环境优化。
+- [ ] **PWA (渐进式 Web 应用)**：配置 Manifest，Service Worker 离线支持。
+
+## 已完成 (Completed)
+
+- [x] 报错：`legacyBehavior` is deprecated (Next.js Link)
+- [x] 知识库无法删除
+- [x] 编辑器样式优化 (Tiptap Typography & Theme)
+- [x] 自动保存 (Auto-save)
+- [x] 快捷键支持 (Hotkeys)
+- [x] 个人页面 (Profile Page)
+- [x] 知识库搜索功能
+- [x] 知识库按日期排序功能
