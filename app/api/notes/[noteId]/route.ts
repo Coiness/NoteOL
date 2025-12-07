@@ -32,14 +32,39 @@ export async function GET(req: NextRequest, props: RouteProps) {
                     include: {
                         repository: true
                     }
+                },
+                collaborators: {
+                    where: { userId: session.user.id }
                 }
             }
         })
 
         if (!note) throw new AppError("Note not found", 404)
-        if (note.userId !== session.user.id) throw new AppError("Forbidden", 403)
 
-        return apiSuccess(note)
+        // 权限检查：Owner 或 Collaborator
+        const isOwner = note.userId === session.user.id
+        const collaborator = note.collaborators[0] // 因为加了 where userId，所以最多只有一条
+        const isCollaborator = !!collaborator
+
+        if (!isOwner && !isCollaborator) {
+            throw new AppError("Forbidden", 403)
+        }
+
+        // 确定当前用户的角色
+        let role = "VIEWER"
+        if (isOwner) {
+            role = "OWNER"
+        } else if (collaborator) {
+            role = collaborator.role
+        }
+
+        // 返回数据中带上 role
+        return apiSuccess({
+            ...note,
+            role,
+            // 为了安全，不要把 collaborators 数组直接暴露给前端，除非需要显示协作者列表
+            collaborators: undefined 
+        })
     } catch (error) {
         return handleApiError(error)
     }
@@ -54,8 +79,25 @@ export async function PUT(req: NextRequest, props: RouteProps) {
         const json = await req.json()
         const body = noteUpdateSchema.parse(json)
         
-        const existingNote = await verifyNoteOwnership(params.noteId, session.user.id)
-        if (!existingNote) throw new AppError("Note not found or access denied", 404)
+        // 检查权限：Owner 或 Editor
+        const note = await prisma.note.findUnique({
+            where: { id: params.noteId },
+            include: {
+                collaborators: {
+                    where: { userId: session.user.id }
+                }
+            }
+        })
+
+        if (!note) throw new AppError("Note not found", 404)
+
+        const isOwner = note.userId === session.user.id
+        const collaborator = note.collaborators[0]
+        const canEdit = isOwner || (collaborator && ["EDITOR", "ADMIN"].includes(collaborator.role))
+
+        if (!canEdit) {
+             throw new AppError("Forbidden: Read-only access", 403)
+        }
 
         const updatedNote = await prisma.$transaction(async (tx) => {
             const data: any = {

@@ -30,9 +30,10 @@ interface TagInputProps {
   value?: string[]
   onChange: (value: string[]) => void
   placeholder?: string
+  disabled?: boolean
 }
 
-export function TagInput({ value = [], onChange, placeholder = "添加标签..." }: TagInputProps) {
+export function TagInput({ value = [], onChange, placeholder = "添加标签...", disabled = false }: TagInputProps) {
   const [open, setOpen] = React.useState(false)
   const [inputValue, setInputValue] = React.useState("")
 
@@ -48,20 +49,22 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
   })
 
   const handleSelect = (tagName: string) => {
+    if(disabled) return
     if (value.includes(tagName)) {
       onChange(value.filter((t) => t !== tagName))
     } else {
       onChange([...value, tagName])
     }
     setInputValue("")
-    // setOpen(false) // 保持打开状态以便连续选择
   }
 
   const handleRemove = (tagName: string) => {
+    if(disabled) return
     onChange(value.filter((t) => t !== tagName))
   }
 
   const handleCreate = () => {
+    if (disabled) return
     if (inputValue && !value.includes(inputValue)) {
       onChange([...value, inputValue])
       setInputValue("")
@@ -87,7 +90,7 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
         <PopoverContent className="w-[200px] p-0" align="start">
           <Command>
             <CommandInput 
-                placeholder="搜索或创建标签..." 
+                placeholder={disabled?"仅可读":"搜索或创建标签..."}
                 value={inputValue}
                 onValueChange={setInputValue}
                 onKeyDown={(e) => {
@@ -135,10 +138,12 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
             className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
+                if(disabled) return
                 handleRemove(tagName)
               }
             }}
             onMouseDown={(e) => {
+              if(disabled) return
               e.preventDefault()
               e.stopPropagation()
             }}

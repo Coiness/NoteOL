@@ -16,6 +16,7 @@ export interface Note {
   createdAt?: string
   updatedAt: string
   tags?: { id: string; name: string }[]
+  role?: "OWNER" | "ADMIN" | "EDITOR" | "VIEWER"
 }
 
 export type ApiResponse<T = any> = {

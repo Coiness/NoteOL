@@ -3,13 +3,15 @@
 import { useState, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { NoteEditor } from "@/components/editor/note-editor"
+import { ShareDialog } from "@/components/editor/share-dialog"
 import { TagInput } from "@/components/ui/tag-input"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Loader2, Trash2, CheckCircle2, Cloud } from "lucide-react"
+import { Loader2, Trash2, CheckCircle2, Cloud, Unlink } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Note } from "@/types"
+import { cn } from "@/lib/utils"
 import { useDebounce } from "@/hooks/use-debounce"
 import * as Y from "yjs"
 import { HocuspocusProvider } from "@hocuspocus/provider"
@@ -17,15 +19,20 @@ import { IndexeddbPersistence } from "y-indexeddb"
 
 interface NoteDetailProps {
   noteId: string
+  repositoryId?: string
+  isDefaultRepository?: boolean
   onDeleteSuccess?: () => void
 }
 
-export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
+export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDeleteSuccess }: NoteDetailProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [title, setTitle] = useState("")
   const [tags, setTags] = useState<string[]>([])
   
+  // Determine if we are in "Remove" mode (Custom Repository) or "Delete" mode (Default Repo / All Notes)
+  const isRemoveMode = !!repositoryId && !isDefaultRepository
+    
   // Y.js State
   const [yDoc] = useState(() => new Y.Doc())
   const [provider, setProvider] = useState<HocuspocusProvider | null>(null)
@@ -47,6 +54,13 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
       return data.data
     },
   })
+
+   // 权限判断
+  const role = note?.role || "VIEWER"
+  const isReadOnly = role === "VIEWER"
+  const canShare = ["OWNER", "ADMIN"].includes(role)
+  const canDelete = role === "OWNER" || (isRemoveMode && ["OWNER", "ADMIN", "EDITOR"].includes(role)) // 移除权限稍微宽松点？或者保持一致
+
 
   // 初始化 Y.js Provider
   useEffect(() => {
@@ -186,21 +200,36 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedTags])
 
-  // 删除笔记 Mutation
+  // 删除/移除笔记 Mutation
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/notes/${noteId}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) throw new Error("Failed to delete note")
+      if (isRemoveMode) {
+          // Remove from repository
+          const res = await fetch(`/api/repositories/${repositoryId}/notes/${noteId}`, {
+            method: "DELETE",
+          })
+          if (!res.ok) throw new Error("Failed to remove note from repository")
+      } else {
+          // Delete note permanently
+          const res = await fetch(`/api/notes/${noteId}`, {
+            method: "DELETE",
+          })
+          if (!res.ok) throw new Error("Failed to delete note")
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notes"] })
-      toast.success("笔记已删除")
+      if (isRemoveMode) {
+          queryClient.invalidateQueries({ queryKey: ["repository-notes", repositoryId] })
+          toast.success("笔记已从知识库移除")
+      } else {
+          toast.success("笔记已删除")
+      }
+      
       if (onDeleteSuccess) {
         onDeleteSuccess()
       } else {
-        router.push("/notes")
+        router.push(isRemoveMode ? `/repositories/${repositoryId}` : "/notes")
       }
     },
   })
@@ -229,7 +258,11 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
           <Input
             value={title}
             onChange={handleTitleChange}
-            className="text-lg font-bold border-none shadow-none focus-visible:ring-0 px-0"
+            readOnly={isReadOnly}
+            className={cn(
+                "text-lg font-bold border-none shadow-none focus-visible:ring-0 px-0",
+                isReadOnly && "cursor-not-allowed opacity-80"
+            )}
             placeholder="无标题笔记"
           />
         </div>
@@ -254,18 +287,27 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
             )}
           </div>
 
+          {canShare && <ShareDialog noteId={noteId} noteTitle={title} />}
+
+          {canDelete && (
           <Button 
             variant="ghost" 
             size="icon" 
             className="text-destructive hover:text-destructive"
+            title={isRemoveMode ? "从知识库移除" : "删除笔记"}
             onClick={() => {
-                if(confirm("确定要删除这篇笔记吗？")) {
+                const message = isRemoveMode 
+                    ? "确定要从该知识库移除这篇笔记吗？笔记本身不会被删除。" 
+                    : "确定要永久删除这篇笔记吗？此操作不可恢复。"
+                
+                if(confirm(message)) {
                     deleteMutation.mutate()
                 }
             }}
           >
-            <Trash2 className="h-4 w-4" />
+            {isRemoveMode ? <Unlink className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
           </Button>
+          )}
         </div>
       </div>
 
@@ -274,7 +316,8 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
         <TagInput 
             value={tags} 
             onChange={setTags} 
-            placeholder="添加标签..."
+            placeholder={isReadOnly ? "无标签" : "添加标签..."}
+            disabled={isReadOnly}
         />
       </div>
 
@@ -286,6 +329,7 @@ export function NoteDetail({ noteId, onDeleteSuccess }: NoteDetailProps) {
             yDoc={yDoc}
             provider={provider}
             status={status}
+            readOnly={isReadOnly}
         />
       </div>
     </div>
