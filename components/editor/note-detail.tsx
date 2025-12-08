@@ -39,6 +39,7 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
   const [yDoc] = useState(() => new Y.Doc())
   const [provider, setProvider] = useState<HocuspocusProvider | null>(null)
   const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("connecting")
+  const [isSynced, setIsSynced] = useState(false)
 
   // 自动保存防抖
   const debouncedTags = useDebounce(tags, 1000)
@@ -115,6 +116,9 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
           onStatus: (data) => {
             setStatus(data.status)
           },
+          onSynced: () => {
+            setIsSynced(true)
+          },
         })
 
         setProvider(wsProvider)
@@ -170,9 +174,9 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
 
   // 初始化本地状态 (从 API 获取的数据)
   useEffect(() => {
-    if (note) {
-      // 如果 Y.js 标题为空，且 API 有标题，则初始化 Y.js
-      // 这通常发生在首次加载且本地/远程没有 Y.js 数据时
+    if (note && isSynced) {
+      // 只有当 Y.js 同步完成且标题为空时，才使用 API 数据初始化
+      // 这避免了重复插入和覆盖远程数据
       const yTitle = yDoc.getText('title')
       if (yTitle.length === 0 && note.title) {
           yDoc.transact(() => {
@@ -185,8 +189,8 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
       setTimeout(() => {
         isFirstLoad.current = false
       }, 100)
-    };
-  }, [note, yDoc])
+    }
+  }, [note, yDoc, isSynced])
 
   // 处理标题变更
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -38,12 +38,22 @@ import {
   Loader2, 
   Users, 
   FileText,
-  Unlink
+  Unlink,
+  Folder,
+  Plus,
+  X
 } from "lucide-react"
 import { toast } from "sonner"
-import { Note } from "@/types"
+import { Note, Repository } from "@/types"
 import { format } from "date-fns"
 import { zhCN } from "date-fns/locale"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface NoteSettingsDialogProps {
   note: Note
@@ -64,12 +74,39 @@ interface Collaborator {
   createdAt: string
 }
 
+interface NoteRepository {
+    repository: Repository
+}
+
 export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDialogProps) {
   const { data: session } = useSession()
   const queryClient = useQueryClient()
   const [isOpen, setIsOpen] = useState(false)
-  const [title, setTitle] = useState(note.title)
-  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [selectedRepoId, setSelectedRepoId] = useState<string>("")
+
+  // 获取完整笔记信息（包含所属知识库）
+  const { data: noteData, isLoading: isLoadingNote } = useQuery<Note & { noteRepositories: NoteRepository[] }>({
+    queryKey: ["note", note.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/notes/${note.id}`)
+      if (!res.ok) throw new Error("Failed to fetch note")
+      const data = await res.json()
+      return data.data
+    },
+    enabled: isOpen,
+  })
+
+  // 获取用户的所有知识库（用于添加）
+  const { data: repositories } = useQuery<Repository[]>({
+    queryKey: ["repositories"],
+    queryFn: async () => {
+      const res = await fetch("/api/repositories")
+      if (!res.ok) throw new Error("Failed to fetch repositories")
+      const data = await res.json()
+      return data.data
+    },
+    enabled: isOpen,
+  })
 
   // 获取协作者列表
   const { data: collaborators, isLoading: isLoadingCollaborators } = useQuery<Collaborator[]>({
@@ -83,25 +120,65 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
     enabled: isOpen,
   })
 
-  // 更新标题 Mutation
-  const updateTitleMutation = useMutation({
-    mutationFn: async (newTitle: string) => {
-      const res = await fetch(`/api/notes/${note.id}`, {
-        method: "PUT",
+  // 添加到知识库 Mutation
+  const addToRepoMutation = useMutation({
+    mutationFn: async (repoId: string) => {
+      const res = await fetch(`/api/repositories/${repoId}/notes`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newTitle }),
+        body: JSON.stringify({ noteId: note.id }),
       })
-      if (!res.ok) throw new Error("Failed to update title")
+      if (!res.ok) throw new Error("Failed to add to repository")
       return res.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notes"] })
       queryClient.invalidateQueries({ queryKey: ["note", note.id] })
-      toast.success("标题已更新")
-      setIsEditingTitle(false)
+      toast.success("已添加到知识库")
+      setSelectedRepoId("")
+      setIsOpen(true) // 确保添加成功后面板保持打开
+    },
+    onError: (error) => {
+        toast.error("添加失败")
+    }
+  })
+
+  // 从知识库移除 Mutation
+  const removeFromRepoMutation = useMutation({
+    mutationFn: async (repoId: string) => {
+      const res = await fetch(`/api/repositories/${repoId}/notes/${note.id}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.message || "Failed to remove from repository")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["note", note.id] })
+      toast.success("已从知识库移除")
+    },
+    onError: (error: Error) => {
+        toast.error(error.message)
+    }
+  })
+
+  // 删除笔记 Mutation
+  const deleteNoteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/notes/${note.id}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) throw new Error("Failed to delete note")
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notes"] })
+      toast.success("笔记已删除")
+      setIsOpen(false)
+      if (onDelete) onDelete()
     },
     onError: () => {
-      toast.error("更新标题失败")
+      toast.error("删除笔记失败")
     },
   })
 
@@ -145,34 +222,19 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
     },
   })
 
-  // 删除笔记 Mutation
-  const deleteNoteMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/notes/${note.id}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) throw new Error("Failed to delete note")
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notes"] })
-      toast.success("笔记已删除")
-      setIsOpen(false)
-      if (onDelete) onDelete()
-    },
-    onError: () => {
-      toast.error("删除笔记失败")
-    },
-  })
-
   // 权限判断
   const currentUserRole = collaborators?.find(c => c.userId === session?.user?.id)?.role || note.role
   const isOwner = currentUserRole === "OWNER"
   const isAdmin = currentUserRole === "ADMIN"
-  const isEditor = currentUserRole === "EDITOR"
   
-  const canEditTitle = isOwner || isAdmin || isEditor
   const canManageMembers = isOwner || isAdmin
-  const canDelete = isOwner
+  const canManageRepos = isOwner // 只有 Owner 可以管理知识库归属
+
+  // 过滤出尚未添加该笔记的知识库
+  const availableRepos = repositories?.filter(repo => 
+    !noteData?.noteRepositories?.some(nr => nr.repository.id === repo.id)
+  ) || []
+
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -201,25 +263,78 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
           <TabsContent value="general" className="space-y-4 py-4">
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="title">标题</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    disabled={!canEditTitle}
-                    className="flex-1"
-                  />
-                  {canEditTitle && title !== note.title && (
-                    <Button 
-                        size="sm" 
-                        onClick={() => updateTitleMutation.mutate(title)}
-                        disabled={updateTitleMutation.isPending}
-                    >
-                        {updateTitleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "保存"}
-                    </Button>
-                  )}
+                <Label>标题</Label>
+                <div className="flex items-center justify-between p-2 border rounded-md bg-muted/20">
+                    <span className="font-medium">{noteData?.title || note.title}</span>
+                    <Badge variant="outline" className="text-xs">只读</Badge>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                    标题只能在编辑器中修改
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>所属知识库</Label>
+                {isLoadingNote ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" /> 加载中...
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                            {noteData?.noteRepositories?.map((nr) => (
+                                <Badge key={nr.repository.id} variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1">
+                                    <Folder className="h-3 w-3 mr-1" />
+                                    {nr.repository.name}
+                                    {nr.repository.isDefault ? (
+                                        <span className="ml-1 text-[10px] text-muted-foreground">(默认)</span>
+                                    ) : canManageRepos && (
+                                        <button 
+                                            onClick={() => removeFromRepoMutation.mutate(nr.repository.id)}
+                                            className="ml-1 hover:bg-destructive/20 hover:text-destructive rounded-full p-0.5 transition-colors"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </Badge>
+                            ))}
+                        </div>
+                        
+                        {canManageRepos && (
+                            <div className="flex gap-2 mt-2">
+                                <Select 
+                                    value={selectedRepoId} 
+                                    onValueChange={setSelectedRepoId}
+                                >
+                                    <SelectTrigger className="h-8 text-xs w-[200px]">
+                                        <SelectValue placeholder="添加到知识库..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableRepos.map(repo => (
+                                            <SelectItem key={repo.id} value={repo.id}>
+                                                {repo.name}
+                                            </SelectItem>
+                                        ))}
+                                        {availableRepos.length === 0 && (
+                                            <div className="p-2 text-xs text-muted-foreground text-center">
+                                                没有更多可选知识库
+                                            </div>
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-8"
+                                    disabled={!selectedRepoId}
+                                    onClick={() => addToRepoMutation.mutate(selectedRepoId)}
+                                >
+                                    <Plus className="h-3 w-3 mr-1" /> 添加
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm">
@@ -246,7 +361,7 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
                 </div>
               </div>
 
-              {canDelete && (
+              {isOwner && (
                 <div className="pt-4 border-t mt-2">
                   <h4 className="text-sm font-medium text-destructive mb-2">危险区域</h4>
                   <Button 
@@ -260,8 +375,11 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
                     }}
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
-                    删除笔记
+                    永久删除笔记
                   </Button>
+                  <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                    这将从所有知识库中彻底删除此笔记
+                  </p>
                 </div>
               )}
             </div>
