@@ -28,6 +28,7 @@ import { TabKeymap } from "./extensions/tab-keymap"
 import { SaveShortcut } from "./extensions/save-shortcut"
 import { SlashCommand } from "./extensions/slash-command"
 import { suggestion } from "./extensions/suggestion"
+import { TableOfContents } from "./table-of-contents"
 
 const lowlight = createLowlight(common)
 
@@ -88,7 +89,7 @@ function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) 
     ],
     editorProps: {
       attributes: {
-        class: "prose prose-stone dark:prose-invert max-w-none focus:outline-none min-h-[500px] px-8 py-6",
+        class: "prose prose-stone dark:prose-invert mx-auto focus:outline-none min-h-full px-8 py-6 pb-32",
       },
     },
     editable: !readOnly,
@@ -96,19 +97,32 @@ function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) 
 
   if (!editor) {
     return (
-      <div className="flex h-[500px] items-center justify-center text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
   }
 
   return (
-    <>
+    <div className="flex flex-col h-full w-full relative">
       <EditorToolbar editor={editor} />
-      <div className="min-h-[500px]">
-        <EditorContent editor={editor} />
+      
+      {/* 大纲按钮 - 绝对定位在右上角 */}
+      <div className="absolute top-2 right-4 z-20">
+        <TableOfContents editor={editor} />
       </div>
-    </>
+
+      <div 
+        className="flex-1 overflow-y-auto w-full cursor-text"
+        onClick={() => {
+          if (!editor.isFocused) {
+            editor.chain().focus().run()
+          }
+        }}
+      >
+        <EditorContent editor={editor} className="h-full" />
+      </div>
+    </div>
   )
 }
 
@@ -124,9 +138,9 @@ export function NoteEditor({ note, readOnly = false, yDoc, provider, status }: N
   const { data: session } = useSession()
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto border rounded-lg shadow-sm bg-card">
+    <div className="relative w-full h-full bg-background">
       {/* 状态指示器 */}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-2 px-2 py-1 text-xs rounded-full bg-background/80 backdrop-blur border shadow-sm">
+      <div className="absolute top-2 right-4 z-10 flex items-center gap-2 px-2 py-1 text-xs rounded-full bg-background/80 backdrop-blur border shadow-sm">
         {status === 'connected' ? (
           <>
             <div className="w-2 h-2 rounded-full bg-green-500" />
