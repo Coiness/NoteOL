@@ -21,7 +21,7 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
-  password      String?   // �����ֶΣ�OAuth��¼ʱ����Ϊ��
+  password      String?   // 密码字段，OAuth登陆时可能为空
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   
@@ -30,10 +30,10 @@ model User {
   sessions      Session[]
   
   // 业务关联
-  repositories  Repository[]       // �û�������֪ʶ��
-  notes         Note[]             // �û���Ϊ Owner �ıʼ�
-  tags          Tag[]              // �û������ı�ǩ
-  collaborations NoteCollaborator[] // �û�����Э���ļ�¼
+  repositories  Repository[]       // 用户创建的知识库
+  notes         Note[]             // 用户作为 Owner 的笔记
+  tags          Tag[]              // 用户创建的标签
+  collaborations NoteCollaborator[] // 用户参与协作的记录
 }
 
 // NextAuth: 第三方认证登录
@@ -111,7 +111,6 @@ model Repository {
   color       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   noteRepositories NoteRepository[]
 }

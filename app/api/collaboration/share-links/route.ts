@@ -58,8 +58,7 @@ export async function POST(req: Request) {
         noteId: body.noteId,
         role: body.role,
         token: token,
-        // 默认有效期 7 天 (可选，这里先不设过期，或者设一个长一点的)
-        // expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
       },
     })
 
@@ -67,7 +66,7 @@ export async function POST(req: Request) {
       id: shareLink.id,
       token: shareLink.token,
       role: shareLink.role,
-      url: `${process.env.NEXT_PUBLIC_APP_URL}/share/claim?token=${token}`,
+      url: `${process.env.NEXTAUTH_URL}/share/claim?token=${token}`,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {

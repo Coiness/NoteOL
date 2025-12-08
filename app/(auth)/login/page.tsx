@@ -1,5 +1,6 @@
 import { Metadata } from "next"
 import Link from "next/link"
+import { Suspense } from "react"
 import { UserAuthForm } from "@/components/auth/user-auth-form"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
@@ -32,7 +33,9 @@ export default function LoginPage() {
             输入您的邮箱登录账户
           </p>
         </div>
-        <UserAuthForm />
+        <Suspense fallback={<div>加载中...</div>}>
+          <UserAuthForm />
+        </Suspense>
         <p className="px-8 text-center text-sm text-muted-foreground">
           <Link
             href="/register"

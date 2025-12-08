@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"  // 新增 useRef
+import { useEffect, useState, useRef, Suspense } from "react"  // 新增 useRef
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
-export default function ClaimPage() {
+function ClaimPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { data: session, status } = useSession()
@@ -75,5 +75,18 @@ export default function ClaimPage() {
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
       <p className="text-muted-foreground">正在加入笔记...</p>
     </div>
+  )
+}
+
+export default function ClaimPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">加载中...</p>
+      </div>
+    }>
+      <ClaimPageContent />
+    </Suspense>
   )
 }

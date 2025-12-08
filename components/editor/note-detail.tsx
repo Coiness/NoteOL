@@ -193,6 +193,7 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
   useEffect(() => {
     if (isFirstLoad.current) return
     if (!note) return
+    if (isReadOnly) return // 只读模式下不自动保存
 
     saveMutation.mutate({ 
       tags: debouncedTags 

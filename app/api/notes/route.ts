@@ -5,6 +5,115 @@ import { prisma } from "@/lib/prisma"
 import { noteCreateSchema } from "@/lib/validations/note"
 import { apiSuccess, handleApiError, AppError } from "@/lib/api-response"
 
+export async function GET(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      throw new AppError("Unauthorized", 401)
+    }
+
+    const { searchParams } = new URL(req.url)
+    const repositoryId = searchParams.get("repositoryId")
+
+    let notes
+
+    if (repositoryId) {
+      // 如果指定了 repositoryId，返回该知识库中的笔记
+      // 首先验证用户对该知识库的访问权限
+      const repo = await prisma.repository.findUnique({
+        where: { id: repositoryId },
+        include: {
+          noteRepositories: {
+            include: {
+              note: {
+                include: {
+                  tags: true,
+                  user: true, // 包含笔记所有者信息
+                  collaborators: {
+                    where: { userId: session.user.id }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!repo) {
+        throw new AppError("Repository not found", 404)
+      }
+
+      // 检查用户是否有权访问该知识库（Owner 或 Collaborator）
+      if (repo.userId !== session.user.id) {
+        throw new AppError("Access denied", 403)
+      }
+
+      // 过滤笔记：用户必须是 Owner 或 Collaborator
+      notes = repo.noteRepositories
+        .map(nr => nr.note)
+        .filter(note => {
+          const isOwner = note.userId === session.user.id
+          const isCollaborator = note.collaborators.length > 0
+          return isOwner || isCollaborator
+        })
+        .map(note => ({
+          ...note,
+          role: note.userId === session.user.id ? "OWNER" : note.collaborators[0]?.role || "VIEWER"
+        }))
+
+    } else {
+      // 如果没有指定 repositoryId，返回用户的所有笔记（Owner + Collaborator）
+      // 1. 获取用户作为 Owner 的笔记
+      const ownedNotes = await prisma.note.findMany({
+        where: { userId: session.user.id },
+        include: {
+          tags: true,
+          user: true,
+          noteRepositories: {
+            include: { repository: true }
+          }
+        }
+      })
+
+      // 2. 获取用户作为 Collaborator 的笔记
+      const collaboratedNotes = await prisma.noteCollaborator.findMany({
+        where: { userId: session.user.id },
+        include: {
+          note: {
+            include: {
+              tags: true,
+              user: true,
+              noteRepositories: {
+                include: { repository: true }
+              }
+            }
+          }
+        }
+      })
+
+      // 3. 合并并去重
+      const allNotes = [
+        ...ownedNotes.map(note => ({ ...note, role: "OWNER" })),
+        ...collaboratedNotes.map(nc => ({ ...nc.note, role: nc.role }))
+      ]
+
+      // 去重（以防万一）
+      const noteMap = new Map()
+      allNotes.forEach(note => {
+        if (!noteMap.has(note.id)) {
+          noteMap.set(note.id, note)
+        }
+      })
+      notes = Array.from(noteMap.values())
+    }
+
+    return apiSuccess({ notes })
+
+  } catch (error) {
+    return handleApiError(error)
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -102,75 +211,6 @@ export async function POST(req: NextRequest) {
     })
 
     return apiSuccess(note)
-
-  } catch (error) {
-    return handleApiError(error)
-  }
-}
-
-export async function GET(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      throw new AppError("Unauthorized", 401)
-    }
-    const userId = session.user.id
-    
-    const { searchParams } = new URL(req.url)
-    const repositoryId = searchParams.get("repositoryId")
-    // 暂时移除分页，简化逻辑，后续再加回
-    // const page = parseInt(searchParams.get("page") || "1")
-    // const limit = parseInt(searchParams.get("limit") || "10")
-    // const skip = (page - 1) * limit
-
-    let notes: ({ tags: { name: string; id: string; color: string | null; userId: string; createdAt: Date }[] } & { id: string; title: string; content: string | null; userId: string; createdAt: Date; updatedAt: Date })[];
-
-    // 如果指定了 repositoryId，且不是 "all" (假设前端传 "all" 或不传代表所有)
-    if (repositoryId && repositoryId !== "all") {
-        // 验证 repository 是否属于该用户
-        const repo = await prisma.repository.findUnique({
-            where: { id: repositoryId }
-        })
-        
-        // 如果是默认知识库，或者知识库不存在/无权访问，则返回所有笔记 (或者报错，这里选择返回所有作为兜底，或者严格一点报错)
-        // 根据之前的讨论：默认知识库包含所有笔记。
-        // 如果 repositoryId 对应的是默认知识库，我们直接查所有笔记。
-        if (repo && repo.userId === userId) {
-             if (repo.isDefault) {
-                 notes = await prisma.note.findMany({
-                    where: { userId: userId },
-                    orderBy: { updatedAt: 'desc' },
-                    include: { tags: true }
-                 })
-             } else {
-                 // 查询特定知识库的笔记
-                 notes = await prisma.note.findMany({
-                     where: {
-                         userId: userId,
-                         noteRepositories: {
-                             some: {
-                                 repositoryId: repositoryId
-                             }
-                         }
-                     },
-                     orderBy: { updatedAt: 'desc' },
-                     include: { tags: true }
-                 })
-             }
-        } else {
-            // 知识库不存在或无权访问，返回空数组
-            notes = []
-        }
-    } else {
-        // 没有指定 repositoryId，返回所有笔记 (对应默认知识库逻辑)
-        notes = await prisma.note.findMany({
-            where: { userId: userId },
-            orderBy: { updatedAt: 'desc' },
-            include: { tags: true }
-        })
-    }
-
-    return apiSuccess({ notes })
 
   } catch (error) {
     return handleApiError(error)

@@ -5,14 +5,14 @@
  * 3. 检查用户对笔记的权限（必须是 Owner）
  * 4. 删除分享链接记录
  */
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
 export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -20,9 +20,11 @@ export async function DELETE(
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
+    const { id } = await params
+
     // 1. 获取 ShareLink 信息以检查权限
     const shareLink = await prisma.shareLink.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { note: true },
     })
 
@@ -38,7 +40,7 @@ export async function DELETE(
 
     // 3. 删除
     await prisma.shareLink.delete({
-      where: { id: params.id },
+      where: { id: id },
     })
 
     return new NextResponse(null, { status: 204 })
