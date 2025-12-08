@@ -13,6 +13,8 @@ import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { Note } from "@/types"
 
+import { NoteSettingsDialog } from "@/components/editor/note-settings-dialog"
+
 interface NoteListProps {
   repositoryId?: string
 }
@@ -136,7 +138,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 key={note.id}
                 href={repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`}
                 className={cn(
-                  "flex flex-col gap-1 p-4 border-b border-sidebar-border transition-colors hover:bg-sidebar-accent/50",
+                  "group flex flex-col gap-1 p-4 border-b border-sidebar-border transition-colors hover:bg-sidebar-accent/50",
                   currentNoteId === note.id && "bg-sidebar-accent text-sidebar-accent-foreground"
                 )}
               >
@@ -150,16 +152,19 @@ export function NoteList({ repositoryId }: NoteListProps) {
                         </Badge>
                     ))}
                 </div>
-                <div className="text-xs text-muted-foreground flex justify-between">
+                <div className="text-xs text-muted-foreground flex justify-between items-center">
                   <span className="truncate max-w-[150px]">
                     {stripHtml(note.content || "").slice(0, 30) || "无内容"}
                   </span>
-                  <span>
-                    {formatDistanceToNow(new Date(note.updatedAt), { 
-                        addSuffix: true,
-                        locale: zhCN 
-                    })}
-                  </span>
+                  <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+                    <span className="text-[10px]">
+                        {formatDistanceToNow(new Date(note.updatedAt), { 
+                            addSuffix: true,
+                            locale: zhCN 
+                        })}
+                    </span>
+                    <NoteSettingsDialog note={note} />
+                  </div>
                 </div>
               </Link>
             ))}

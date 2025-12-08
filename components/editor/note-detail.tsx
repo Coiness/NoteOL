@@ -7,7 +7,7 @@ import { ShareDialog } from "@/components/editor/share-dialog"
 import { TagInput } from "@/components/ui/tag-input"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Loader2, Trash2, CheckCircle2, Cloud, Unlink } from "lucide-react"
+import { Loader2, Trash2, CheckCircle2, Cloud, Unlink, Users } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Note } from "@/types"
@@ -16,6 +16,7 @@ import { useDebounce } from "@/hooks/use-debounce"
 import * as Y from "yjs"
 import { HocuspocusProvider } from "@hocuspocus/provider"
 import { IndexeddbPersistence } from "y-indexeddb"
+import { Badge } from "@/components/ui/badge"
 
 interface NoteDetailProps {
   noteId: string
@@ -29,6 +30,7 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
   const queryClient = useQueryClient()
   const [title, setTitle] = useState("")
   const [tags, setTags] = useState<string[]>([])
+  const [onlineUsers, setOnlineUsers] = useState(0)
   
   // Determine if we are in "Remove" mode (Custom Repository) or "Delete" mode (Default Repo / All Notes)
   const isRemoveMode = !!repositoryId && !isDefaultRepository
@@ -61,6 +63,20 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
   const canShare = ["OWNER", "ADMIN"].includes(role)
   const canDelete = role === "OWNER" || (isRemoveMode && ["OWNER", "ADMIN", "EDITOR"].includes(role)) // 移除权限稍微宽松点？或者保持一致
 
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case "OWNER":
+        return <Badge variant="default" className="bg-primary/80 hover:bg-primary/80">所有者</Badge>
+      case "ADMIN":
+        return <Badge variant="secondary">管理员</Badge>
+      case "EDITOR":
+        return <Badge variant="outline" className="border-blue-500 text-blue-500">编辑者</Badge>
+      case "VIEWER":
+        return <Badge variant="outline" className="text-muted-foreground">访客</Badge>
+      default:
+        return null
+    }
+  }
 
   // 初始化 Y.js Provider
   useEffect(() => {
@@ -117,6 +133,23 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
     }
   }, [noteId, yDoc])
 
+  // 监听在线用户数
+  useEffect(() => {
+    if (!provider) return
+
+    const updateUsers = () => {
+      // awareness.getStates() 返回一个 Map，包含所有在线客户端的状态
+      setOnlineUsers(provider.awareness.getStates().size)
+    }
+
+    provider.awareness.on('change', updateUsers)
+    updateUsers() // 初始化
+
+    return () => {
+      provider.awareness.off('change', updateUsers)
+    }
+  }, [provider])
+
   // 监听 Y.js 标题变化
   useEffect(() => {
     const yTitle = yDoc.getText('title')
@@ -152,7 +185,7 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
       setTimeout(() => {
         isFirstLoad.current = false
       }, 100)
-    }
+    };
   }, [note, yDoc])
 
   // 处理标题变更
@@ -268,6 +301,7 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
           />
         </div>
         <div className="flex items-center gap-2">
+
           {/* 保存状态指示器 */}
           <div className="flex items-center text-sm text-muted-foreground mr-2">
             {saveMutation.isPending ? (
@@ -286,6 +320,17 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
                 已保存
               </span>
             )}
+          </div>
+
+           {/* 在线用户数 */}
+          <div className="flex items-center text-sm text-muted-foreground mr-2" title="在线用户">
+            <Users className="h-4 w-4 mr-1.5" />
+            <span>{onlineUsers}</span>
+          </div>
+
+          {/* 权限徽章 */}
+          <div className="mr-2">
+            {getRoleBadge(role)}
           </div>
 
           {canShare && <ShareDialog noteId={noteId} noteTitle={title} />}
