@@ -25,6 +25,9 @@ import { Note } from "@/types"
 import { cn } from "@/lib/utils"
 import { EditorToolbar } from "./editor-toolbar"
 import { TabKeymap } from "./extensions/tab-keymap"
+import { SaveShortcut } from "./extensions/save-shortcut"
+import { SlashCommand } from "./extensions/slash-command"
+import { suggestion } from "./extensions/suggestion"
 
 const lowlight = createLowlight(common)
 
@@ -62,6 +65,10 @@ function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) 
         lowlight,
       }),
       TabKeymap,
+      SaveShortcut,
+      SlashCommand.configure({
+        suggestion,
+      }),
       // 协同扩展
       Collaboration.configure({
         document: yDoc,

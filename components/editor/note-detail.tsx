@@ -140,6 +140,7 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
   // 监听在线用户数
   useEffect(() => {
     if (!provider) return
+    if(!provider.awareness === null) return
 
     const updateUsers = () => {
       // awareness.getStates() 返回一个 Map，包含所有在线客户端的状态
