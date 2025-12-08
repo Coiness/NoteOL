@@ -87,15 +87,15 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
 
       // 2. 获取 Token 并连接 WebSocket
       try {
-        const res = await fetch('/api/collaboration/auth')
+        const res = await fetch(`/api/collaboration/auth?noteId=${noteId}`)
         if (!res.ok) throw new Error('Failed to get auth token')
-        const { token } = await res.json()
+        const { token, role: wsRole } = await res.json()
 
         wsProvider = new HocuspocusProvider({
-          url: 'ws://localhost:1234',
+          url: `ws://localhost:1234`,
           name: noteId,
-          document: yDoc,
           token,
+          document: yDoc,
           onStatus: (data) => {
             setStatus(data.status)
           },
