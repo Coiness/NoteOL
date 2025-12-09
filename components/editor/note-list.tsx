@@ -23,6 +23,7 @@ import {
 
 import { NoteSettingsDialog } from "@/components/editor/note-settings-dialog"
 import { ImportNoteDialog } from "@/components/editor/import-note-dialog"
+import { useDebounce } from "@/hooks/use-debounce"
 
 interface NoteListProps {
   repositoryId?: string
@@ -34,6 +35,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
+  const debouncedSearchQuery = useDebounce(searchQuery, 500)
   const [sortOrder, setSortOrder] = useState<"updated_desc" | "updated_asc" | "created_desc" | "created_asc" | "title_asc" | "title_desc">("updated_desc")
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   
@@ -42,16 +44,24 @@ export function NoteList({ repositoryId }: NoteListProps) {
 
   // 获取笔记列表
   const { data: notes, isLoading } = useQuery<Note[]>({
-    queryKey: ["notes", repositoryId],  // 加入 repositoryId 作为缓存键的一部分
+    queryKey: ["notes", repositoryId, debouncedSearchQuery, sortOrder],
     queryFn: async () => {
-      const url = repositoryId 
-        ? `/api/notes?repositoryId=${repositoryId}`
-        : "/api/notes"
-      const res = await fetch(url)
+      const [sort, order] = sortOrder.split("_")
+      const sortParam = sort === "updated" ? "updatedAt" : sort === "created" ? "createdAt" : "title"
+      
+      const params = new URLSearchParams()
+      if (repositoryId) params.set("repositoryId", repositoryId)
+      if (debouncedSearchQuery) params.set("query", debouncedSearchQuery)
+      params.set("sort", sortParam)
+      params.set("order", order)
+
+      const res = await fetch(`/api/notes?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch notes")
       const data = await res.json()
       return data.data.notes
     },
+    staleTime: 1000 * 10, // 10秒内不重新请求
+    refetchOnWindowFocus: false,
   })
 
   // 创建新笔记
@@ -74,43 +84,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
       router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
     },
   })
-  // 过滤笔记
-  const filteredNotes = notes?.filter(note => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    
-    // 标签搜索 (#tag)
-    if (query.startsWith("#")) {
-        const tagName = query.slice(1)
-        if (!tagName) return true
-        return note.tags?.some(tag => tag.name.toLowerCase().includes(tagName))
-    }
-
-    // 普通搜索 (标题或内容)
-    return (
-        note.title.toLowerCase().includes(query) || 
-        (note.content && note.content.toLowerCase().includes(query))
-    )
-  })
-
-  const sortedNotes = filteredNotes?.sort((a, b) => {
-    switch (sortOrder) {
-      case "updated_desc":
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      case "updated_asc":
-        return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
-      case "created_desc":
-        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-      case "created_asc":
-        return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
-      case "title_asc":
-        return a.title.localeCompare(b.title)
-      case "title_desc":
-        return b.title.localeCompare(a.title)
-      default:
-        return 0
-    }
-  })
+  const sortedNotes = notes || []
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -119,7 +93,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
           open={isImportDialogOpen} 
           onOpenChange={setIsImportDialogOpen} 
           repositoryId={repositoryId}
-          existingNoteIds={notes?.map(n => n.id) || []}
         />
       )}
       <div className="flex flex-col gap-2 p-4 border-b border-sidebar-border">

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { noteCreateSchema } from "@/lib/validations/note"
 import { apiSuccess, handleApiError, AppError } from "@/lib/api-response"
+import { Prisma } from "@prisma/client"
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,131 +15,92 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const repositoryId = searchParams.get("repositoryId")
+    const excludeRepositoryId = searchParams.get("excludeRepositoryId")
     const query = searchParams.get("query")
+    const tagId = searchParams.get("tagId")
+    const sort = searchParams.get("sort") || "updatedAt"
+    const order = (searchParams.get("order") || "desc") as Prisma.SortOrder
 
-    let notes
-
-    if (repositoryId) {
-      // 如果指定了 repositoryId，返回该知识库中的笔记
-      // 首先验证用户对该知识库的访问权限
-      const repo = await prisma.repository.findUnique({
-        where: { id: repositoryId },
-        include: {
-          noteRepositories: {
-            include: {
-              note: {
-                include: {
-                  tags: true,
-                  user: true, // 包含笔记所有者信息
-                  collaborators: {
-                    where: { userId: session.user.id }
-                  }
-                }
-              }
-            }
-          }
+    // 构建查询条件
+    const where: Prisma.NoteWhereInput = {
+      AND: [
+        // 权限控制：用户必须是 Owner 或 Collaborator
+        {
+          OR: [
+            { userId: session.user.id },
+            { collaborators: { some: { userId: session.user.id } } }
+          ]
         }
-      })
-
-      if (!repo) {
-        throw new AppError("Repository not found", 404)
-      }
-
-      // 检查用户是否有权访问该知识库（Owner 或 Collaborator）
-      if (repo.userId !== session.user.id) {
-        throw new AppError("Access denied", 403)
-      }
-
-      // 过滤笔记：用户必须是 Owner 或 Collaborator
-      notes = repo.noteRepositories
-        .map(nr => nr.note)
-        .filter(note => {
-          const isOwner = note.userId === session.user.id
-          const isCollaborator = note.collaborators.length > 0
-          
-          // 权限检查
-          if (!isOwner && !isCollaborator) return false
-
-          // 搜索过滤
-          if (query) {
-            const lowerQuery = query.toLowerCase()
-            return (
-              note.title.toLowerCase().includes(lowerQuery) ||
-              (note.content && note.content.toLowerCase().includes(lowerQuery))
-            )
-          }
-
-          return true
-        })
-        .map(note => ({
-          ...note,
-          role: note.userId === session.user.id ? "OWNER" : note.collaborators[0]?.role || "VIEWER"
-        }))
-
-    } else {
-      // 如果没有指定 repositoryId，返回用户的所有笔记（Owner + Collaborator）
-      
-      const whereClause = query ? {
-        OR: [
-            { title: { contains: query, mode: 'insensitive' as const } },
-            { content: { contains: query, mode: 'insensitive' as const } }
-        ]
-      } : {}
-
-      // 1. 获取用户作为 Owner 的笔记
-      const ownedNotes = await prisma.note.findMany({
-        where: { 
-            userId: session.user.id,
-            ...whereClause
-        },
-        include: {
-          tags: true,
-          user: true,
-          noteRepositories: {
-            include: { repository: true }
-          }
-        }
-      })
-
-      // 2. 获取用户作为 Collaborator 的笔记
-      const collaboratedNotes = await prisma.noteCollaborator.findMany({
-        where: { 
-            userId: session.user.id,
-            note: {
-                ...whereClause
-            }
-        },
-        include: {
-          note: {
-            include: {
-              tags: true,
-              user: true,
-              noteRepositories: {
-                include: { repository: true }
-              }
-            }
-          }
-        }
-      })
-
-      // 3. 合并并去重
-      const allNotes = [
-        ...ownedNotes.map(note => ({ ...note, role: "OWNER" })),
-        ...collaboratedNotes.map(nc => ({ ...nc.note, role: nc.role }))
       ]
-
-      // 去重（以防万一）
-      const noteMap = new Map()
-      allNotes.forEach(note => {
-        if (!noteMap.has(note.id)) {
-          noteMap.set(note.id, note)
-        }
-      })
-      notes = Array.from(noteMap.values())
     }
 
-    return apiSuccess({ notes })
+    const andConditions = where.AND as Prisma.NoteWhereInput[]
 
+    // 搜索过滤
+    if (query) {
+      if (query.startsWith('#')) {
+        const tagName = query.slice(1)
+        if (tagName) {
+          andConditions.push({
+            tags: { some: { name: { contains: tagName, mode: 'insensitive' } } }
+          })
+        }
+      } else {
+        andConditions.push({
+          OR: [
+            { title: { contains: query, mode: 'insensitive' } },
+            { content: { contains: query, mode: 'insensitive' } }
+          ]
+        })
+      }
+    }
+
+    // 标签过滤
+    if (tagId) {
+      andConditions.push({
+        tags: { some: { id: tagId } }
+      })
+    }
+
+    // 知识库过滤
+    if (repositoryId) {
+      andConditions.push({
+        noteRepositories: { some: { repositoryId: repositoryId } }
+      })
+    }
+
+    // 排除知识库过滤 (用于导入功能)
+    if (excludeRepositoryId) {
+      andConditions.push({
+        noteRepositories: { none: { repositoryId: excludeRepositoryId } }
+      })
+    }
+
+    // 执行查询
+    const notes = await prisma.note.findMany({
+      where,
+      include: {
+        tags: true,
+        user: true,
+        collaborators: {
+          where: { userId: session.user.id }
+        },
+        noteRepositories: {
+          include: { repository: true }
+        }
+      },
+      orderBy: {
+        [sort]: order
+      }
+    })
+
+    // 处理返回数据，添加 role 字段
+    const formattedNotes = notes.map(note => ({
+      ...note,
+      role: note.userId === session.user.id ? "OWNER" : note.collaborators[0]?.role || "VIEWER"
+    }))
+
+    return apiSuccess({ notes: formattedNotes })
   } catch (error) {
     return handleApiError(error)
   }

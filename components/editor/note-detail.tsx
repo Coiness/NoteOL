@@ -56,6 +56,8 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
       const data = await res.json()
       return data.data
     },
+    staleTime: 1000 * 10, // 10秒内不重新请求
+    refetchOnWindowFocus: false,
   })
 
    // 权限判断
@@ -186,7 +188,14 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
           })
       }
       
-      setTags(note.tags?.map(t => t.name) || [])
+      const newTags = note.tags?.map(t => t.name) || []
+      // 避免不必要的更新导致死循环
+      setTags(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(newTags)) {
+          return newTags
+        }
+        return prev
+      })
       
       setTimeout(() => {
         isFirstLoad.current = false

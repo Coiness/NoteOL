@@ -21,32 +21,27 @@ interface ImportNoteDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   repositoryId: string
-  existingNoteIds: string[]
 }
 
 export function ImportNoteDialog({ 
   open, 
   onOpenChange, 
   repositoryId, 
-  existingNoteIds 
 }: ImportNoteDialogProps) {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
 
-  // Fetch all notes (not filtered by repo)
-  const { data: allNotes, isLoading } = useQuery<Note[]>({
-    queryKey: ["notes", "all"], // Use a different key to avoid conflict with repo notes
+  // Fetch notes that are NOT in the current repository
+  const { data: availableNotes = [], isLoading } = useQuery<Note[]>({
+    queryKey: ["notes", "importable", repositoryId],
     queryFn: async () => {
-      const res = await fetch("/api/notes")
+      const res = await fetch(`/api/notes?excludeRepositoryId=${repositoryId}`)
       if (!res.ok) throw new Error("Failed to fetch notes")
       const data = await res.json()
       return data.data.notes
     },
     enabled: open, // Only fetch when dialog is open
   })
-
-  // Filter out notes that are already in the current repository
-  const availableNotes = allNotes?.filter(note => !existingNoteIds.includes(note.id)) || []
 
   const importMutation = useMutation({
     mutationFn: async (noteId: string) => {
