@@ -7,11 +7,19 @@ import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, FileText, Loader2, Search } from "lucide-react"
+import { Plus, FileText, Loader2, Search, ArrowUpDown, Calendar, Clock, Type } from "lucide-react"
 import { cn, stripHtml, getTagColor } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { Note } from "@/types"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu"
 
 import { NoteSettingsDialog } from "@/components/editor/note-settings-dialog"
 
@@ -25,6 +33,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
+  const [sortOrder, setSortOrder] = useState<"updated_desc" | "updated_asc" | "created_desc" | "created_asc" | "title_asc" | "title_desc">("updated_desc")
   
   // 使用 URL query 参数中的 noteId
   const currentNoteId = searchParams.get("noteId") 
@@ -82,24 +91,82 @@ export function NoteList({ repositoryId }: NoteListProps) {
     )
   })
 
+  const sortedNotes = filteredNotes?.sort((a, b) => {
+    switch (sortOrder) {
+      case "updated_desc":
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      case "updated_asc":
+        return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+      case "created_desc":
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      case "created_asc":
+        return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+      case "title_asc":
+        return a.title.localeCompare(b.title)
+      case "title_desc":
+        return b.title.localeCompare(a.title)
+      default:
+        return 0
+    }
+  })
+
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex flex-col gap-2 p-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">笔记列表</h2>
-            <Button 
-                size="icon" 
-                variant="ghost" 
-                onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending}
-                className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            >
-            {createMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-                <Plus className="h-4 w-4" />
-            )}
-            </Button>
+            <div className="flex items-center gap-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                    <ArrowUpDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>排序方式</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setSortOrder("updated_desc")}>
+                    <Clock className="mr-2 h-4 w-4" />
+                    更新时间 (最新)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortOrder("updated_asc")}>
+                    <Clock className="mr-2 h-4 w-4" />
+                    更新时间 (最早)
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setSortOrder("created_desc")}>
+                    <Calendar className="mr-2 h-4 w-4" />
+                    创建时间 (最新)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortOrder("created_asc")}>
+                    <Calendar className="mr-2 h-4 w-4" />
+                    创建时间 (最早)
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setSortOrder("title_asc")}>
+                    <Type className="mr-2 h-4 w-4" />
+                    标题 (A-Z)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortOrder("title_desc")}>
+                    <Type className="mr-2 h-4 w-4" />
+                    标题 (Z-A)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  onClick={() => createMutation.mutate()}
+                  disabled={createMutation.isPending}
+                  className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+              {createMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                  <Plus className="h-4 w-4" />
+              )}
+              </Button>
+            </div>
         </div>
         <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -117,7 +184,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
           <div className="flex justify-center p-4">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        ) : filteredNotes?.length === 0 ? (
+        ) : sortedNotes?.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
             <FileText className="h-12 w-12 mb-2 opacity-20" />
             <p>{searchQuery ? "未找到匹配笔记" : "暂无笔记"}</p>
@@ -133,7 +200,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
           </div>
         ) : (
           <div className="flex flex-col">
-            {filteredNotes?.map((note) => (
+            {sortedNotes?.map((note) => (
               <Link
                 key={note.id}
                 href={repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`}

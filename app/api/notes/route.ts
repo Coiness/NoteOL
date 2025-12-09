@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const repositoryId = searchParams.get("repositoryId")
+    const query = searchParams.get("query")
 
     let notes
 
@@ -54,7 +55,20 @@ export async function GET(req: NextRequest) {
         .filter(note => {
           const isOwner = note.userId === session.user.id
           const isCollaborator = note.collaborators.length > 0
-          return isOwner || isCollaborator
+          
+          // 权限检查
+          if (!isOwner && !isCollaborator) return false
+
+          // 搜索过滤
+          if (query) {
+            const lowerQuery = query.toLowerCase()
+            return (
+              note.title.toLowerCase().includes(lowerQuery) ||
+              (note.content && note.content.toLowerCase().includes(lowerQuery))
+            )
+          }
+
+          return true
         })
         .map(note => ({
           ...note,
@@ -63,9 +77,20 @@ export async function GET(req: NextRequest) {
 
     } else {
       // 如果没有指定 repositoryId，返回用户的所有笔记（Owner + Collaborator）
+      
+      const whereClause = query ? {
+        OR: [
+            { title: { contains: query, mode: 'insensitive' as const } },
+            { content: { contains: query, mode: 'insensitive' as const } }
+        ]
+      } : {}
+
       // 1. 获取用户作为 Owner 的笔记
       const ownedNotes = await prisma.note.findMany({
-        where: { userId: session.user.id },
+        where: { 
+            userId: session.user.id,
+            ...whereClause
+        },
         include: {
           tags: true,
           user: true,
@@ -77,7 +102,12 @@ export async function GET(req: NextRequest) {
 
       // 2. 获取用户作为 Collaborator 的笔记
       const collaboratedNotes = await prisma.noteCollaborator.findMany({
-        where: { userId: session.user.id },
+        where: { 
+            userId: session.user.id,
+            note: {
+                ...whereClause
+            }
+        },
         include: {
           note: {
             include: {

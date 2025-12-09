@@ -1,6 +1,7 @@
 import { MainNav } from "@/components/layout/main-nav"
 import { UserNav } from "@/components/layout/user-nav"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { GlobalSearch } from "@/components/global-search"
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -12,6 +13,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           </div>
           <MainNav className="mx-6" />
           <div className="ml-auto flex items-center space-x-4">
+            <GlobalSearch />
             <ThemeToggle />
             <UserNav />
           </div>

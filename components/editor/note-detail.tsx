@@ -139,19 +139,20 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
 
   // 监听在线用户数
   useEffect(() => {
-    if (!provider) return
-    if(!provider.awareness === null) return
+    if (!provider || !provider.awareness) return
 
     const updateUsers = () => {
       // awareness.getStates() 返回一个 Map，包含所有在线客户端的状态
-      setOnlineUsers(provider.awareness.getStates().size)
+      if (provider.awareness) {
+        setOnlineUsers(provider.awareness.getStates().size)
+      }
     }
 
     provider.awareness.on('change', updateUsers)
     updateUsers() // 初始化
 
     return () => {
-      provider.awareness.off('change', updateUsers)
+      provider.awareness?.off('change', updateUsers)
     }
   }, [provider])
 
@@ -291,85 +292,87 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
 
   return (
     <div className="flex h-full flex-col">
-      {/* 顶部工具栏 */}
-      <div className="flex items-center justify-between border-b p-4">
-        <div className="flex-1 mr-4">
-          <Input
-            value={title}
-            onChange={handleTitleChange}
-            readOnly={isReadOnly}
-            className={cn(
-                "text-lg font-bold border-none shadow-none focus-visible:ring-0 px-0",
-                isReadOnly && "cursor-not-allowed opacity-80"
-            )}
-            placeholder="无标题笔记"
-          />
+      {/* 顶部区域：标题 + 标签 + 工具栏 */}
+      <div className="border-b p-2 pl-4 transition-all">
+        <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 space-y-2">
+                <Input
+                    value={title}
+                    onChange={handleTitleChange}
+                    readOnly={isReadOnly}
+                    className={cn(
+                        "text-3xl font-bold leading-tight border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto py-0 bg-transparent placeholder:text-muted-foreground/40",
+                        isReadOnly && "cursor-not-allowed opacity-80"
+                    )}
+                    placeholder="无标题笔记"
+                />
+                <div className="flex items-center">
+                    <TagInput 
+                        value={tags} 
+                        onChange={setTags} 
+                        placeholder={isReadOnly ? "无标签" : "添加标签..."}
+                        disabled={isReadOnly}
+                        className="gap-1"
+                        triggerClassName="h-6 text-xs px-2 border-none hover:bg-muted/50"
+                    />
+                </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 pt-1">
+                {/* 保存状态指示器 */}
+                <div className="flex items-center text-sm text-muted-foreground mr-2 hidden sm:flex">
+                    {saveMutation.isPending ? (
+                    <>
+                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                        <span className="hidden lg:inline">保存中...</span>
+                    </>
+                    ) : saveMutation.isError ? (
+                    <span className="text-destructive flex items-center">
+                        <Cloud className="h-3 w-3 mr-1.5" />
+                        <span className="hidden lg:inline">保存失败</span>
+                    </span>
+                    ) : (
+                    <span className="flex items-center text-muted-foreground/60">
+                        <CheckCircle2 className="h-3 w-3 mr-1.5" />
+                        <span className="hidden lg:inline">已保存</span>
+                    </span>
+                    )}
+                </div>
+
+                {/* 在线用户数 */}
+                <div className="flex items-center text-sm text-muted-foreground mr-2 hidden sm:flex" title="在线用户">
+                    <Users className="h-4 w-4 mr-1.5" />
+                    <span>{onlineUsers}</span>
+                </div>
+
+                {/* 权限徽章 */}
+                <div className="mr-2 hidden sm:block">
+                    {getRoleBadge(role)}
+                </div>
+
+                {canShare && <ShareDialog noteId={noteId} noteTitle={title} />}
+
+                {canDelete && (
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-destructive hover:text-destructive"
+                    title={isRemoveMode ? "从知识库移除" : "删除笔记"}
+                    onClick={() => {
+                        const message = isRemoveMode 
+                            ? "确定要从该知识库移除这篇笔记吗？笔记本身不会被删除。" 
+                            : "确定要永久删除这篇笔记吗？此操作不可恢复。"
+                        
+                        if(confirm(message)) {
+                            deleteMutation.mutate()
+                        }
+                    }}
+                >
+                    {isRemoveMode ? <Unlink className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                </Button>
+                )}
+            </div>
         </div>
-        <div className="flex items-center gap-2">
-
-          {/* 保存状态指示器 */}
-          <div className="flex items-center text-sm text-muted-foreground mr-2">
-            {saveMutation.isPending ? (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
-                <span>保存中...</span>
-              </>
-            ) : saveMutation.isError ? (
-              <span className="text-destructive flex items-center">
-                <Cloud className="h-3 w-3 mr-1.5" />
-                保存失败
-              </span>
-            ) : (
-              <span className="flex items-center text-muted-foreground/60">
-                <CheckCircle2 className="h-3 w-3 mr-1.5" />
-                已保存
-              </span>
-            )}
-          </div>
-
-           {/* 在线用户数 */}
-          <div className="flex items-center text-sm text-muted-foreground mr-2" title="在线用户">
-            <Users className="h-4 w-4 mr-1.5" />
-            <span>{onlineUsers}</span>
-          </div>
-
-          {/* 权限徽章 */}
-          <div className="mr-2">
-            {getRoleBadge(role)}
-          </div>
-
-          {canShare && <ShareDialog noteId={noteId} noteTitle={title} />}
-
-          {canDelete && (
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="text-destructive hover:text-destructive"
-            title={isRemoveMode ? "从知识库移除" : "删除笔记"}
-            onClick={() => {
-                const message = isRemoveMode 
-                    ? "确定要从该知识库移除这篇笔记吗？笔记本身不会被删除。" 
-                    : "确定要永久删除这篇笔记吗？此操作不可恢复。"
-                
-                if(confirm(message)) {
-                    deleteMutation.mutate()
-                }
-            }}
-          >
-            {isRemoveMode ? <Unlink className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
-          </Button>
-          )}
-        </div>
-      </div>
-
-      {/* 标签栏 */}
-      <div className="px-4 py-2 border-b">
-        <TagInput 
-            value={tags} 
-            onChange={setTags} 
-            placeholder={isReadOnly ? "无标签" : "添加标签..."}
-            disabled={isReadOnly}
-        />
       </div>
 
       {/* 编辑器区域 */}

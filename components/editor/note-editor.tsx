@@ -89,7 +89,21 @@ function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) 
     ],
     editorProps: {
       attributes: {
-        class: "prose prose-stone dark:prose-invert mx-auto focus:outline-none min-h-full px-8 py-6 pb-32",
+        class: "prose prose-stone dark:prose-invert mx-auto focus:outline-none min-h-full px-8 py-12 pb-[30vh]",
+      },
+      // 确保光标距离底部有一定距离时就开始滚动
+      scrollThreshold: {
+        top: 100,
+        bottom: 200, // 距离底部 200px 时开始滚动
+        left: 0,
+        right: 0,
+      },
+      // 滚动时保留的边距
+      scrollMargin: {
+        top: 100,
+        bottom: 200, // 滚动后保持底部有 200px 的空间
+        left: 0,
+        right: 0,
       },
     },
     editable: !readOnly,
@@ -104,23 +118,24 @@ function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) 
   }
 
   return (
-    <div className="flex flex-col h-full w-full relative">
-      <EditorToolbar editor={editor} />
-      
-      {/* 大纲按钮 - 绝对定位在右上角 */}
-      <div className="absolute top-2 right-4 z-20">
-        <TableOfContents editor={editor} />
-      </div>
-
+    <div className="flex h-full w-full relative overflow-hidden">
+      {/* 左侧编辑器区域 */}
       <div 
-        className="flex-1 overflow-y-auto w-full cursor-text"
+        className="flex-1 h-full overflow-y-auto w-full cursor-text"
         onClick={() => {
           if (!editor.isFocused) {
             editor.chain().focus().run()
           }
         }}
       >
-        <EditorContent editor={editor} className="h-full" />
+        <div className="max-w-4xl mx-auto h-full">
+            <EditorContent editor={editor} className="h-full" />
+        </div>
+      </div>
+
+      {/* 右侧大纲区域 - 固定宽度 */}
+      <div className="hidden xl:block w-64 h-full border-l bg-muted/10 p-4 overflow-y-auto shrink-0">
+        <TableOfContents editor={editor} />
       </div>
     </div>
   )

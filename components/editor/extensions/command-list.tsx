@@ -27,7 +27,17 @@ export const CommandList = forwardRef((props: any, ref) => {
     selectItem(selectedIndex)
   }
 
-  useEffect(() => setSelectedIndex(0), [props.items])
+  useEffect(() => {
+    const container = document.getElementById('slash-command-list')
+    const activeItem = document.getElementById(`slash-command-item-${selectedIndex}`)
+    
+    if (container && activeItem) {
+        activeItem.scrollIntoView({
+            block: 'nearest',
+            behavior: 'smooth'
+        })
+    }
+  }, [selectedIndex])
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }: { event: KeyboardEvent }) => {
@@ -55,12 +65,13 @@ export const CommandList = forwardRef((props: any, ref) => {
   }
 
   return (
-    <div className="z-50 h-auto max-h-[330px] w-72 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md animate-in fade-in zoom-in-95 duration-200">
+    <div id="slash-command-list" className="z-50 h-auto max-h-[330px] w-72 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md animate-in fade-in zoom-in-95 duration-200">
       <div className="flex flex-col gap-1">
         {props.items.map((item: any, index: number) => {
           const Icon = item.icon
           return (
             <button
+              id={`slash-command-item-${index}`}
               className={cn(
                 "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
                 index === selectedIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground"

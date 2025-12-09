@@ -31,9 +31,11 @@ interface TagInputProps {
   onChange: (value: string[]) => void
   placeholder?: string
   disabled?: boolean
+  className?: string
+  triggerClassName?: string
 }
 
-export function TagInput({ value = [], onChange, placeholder = "添加标签...", disabled = false }: TagInputProps) {
+export function TagInput({ value = [], onChange, placeholder = "添加标签...", disabled = false, className, triggerClassName }: TagInputProps) {
   const [open, setOpen] = React.useState(false)
   const [inputValue, setInputValue] = React.useState("")
 
@@ -73,7 +75,7 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
   }
 
   return (
-    <div className="flex flex-wrap gap-2 items-center"> 
+    <div className={cn("flex flex-wrap gap-2 items-center", className)}> 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -81,7 +83,7 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
             role="combobox"
             aria-expanded={open}
             size="sm"
-            className="h-8 border-dashed"
+            className={cn("h-8 border-dashed", triggerClassName)}
           >
             <Plus className="mr-2 h-4 w-4" />
             {placeholder}

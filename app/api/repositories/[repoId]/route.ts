@@ -9,6 +9,32 @@ type RouteProps = {
     params: Promise<{ repoId: string }>
 }
 
+export async function GET(req: NextRequest, props: RouteProps) {
+    try {
+        const params = await props.params
+        const session = await getServerSession(authOptions)
+        if (!session) throw new AppError("Unauthorized", 401)
+
+        const repo = await prisma.repository.findUnique({
+            where: { id: params.repoId }
+        })
+
+        if (!repo) {
+            throw new AppError("Repository not found", 404)
+        }
+
+        // 简单的权限检查：目前只允许 Owner 查看详情
+        // 如果未来支持协作知识库，这里需要修改
+        if (repo.userId !== session.user.id) {
+             throw new AppError("Access denied", 403)
+        }
+
+        return apiSuccess(repo)
+    } catch (error) {
+        return handleApiError(error)
+    }
+}
+
 export async function PUT(req: NextRequest, props: RouteProps) {
     try {
         const params = await props.params

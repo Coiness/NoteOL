@@ -1,4 +1,5 @@
 import { NoteList } from "@/components/editor/note-list"
+import { ResizableLayout } from "@/components/layout/resizable-layout"
 import { ReactNode, Suspense } from "react"
 
 export default function NotesLayout({
@@ -7,18 +8,14 @@ export default function NotesLayout({
   children: ReactNode
 }) {
   return (
-    <div className="flex h-full">
-      {/* 左侧列表 - 在移动端可能需要隐藏或做成抽屉 */}
-      <aside className="w-80 hidden md:block h-full border-r bg-sidebar text-sidebar-foreground">
+    <ResizableLayout
+      sidebar={
         <Suspense fallback={<div className="p-4">加载中...</div>}>
           <NoteList />
         </Suspense>
-      </aside>
-      
-      {/* 右侧内容 */}
-      <main className="flex-1 h-full overflow-hidden bg-background">
-        {children}
-      </main>
-    </div>
+      }
+    >
+      {children}
+    </ResizableLayout>
   )
 }
