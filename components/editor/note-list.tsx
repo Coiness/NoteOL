@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 import { NoteSettingsDialog } from "@/components/editor/note-settings-dialog"
+import { ImportNoteDialog } from "@/components/editor/import-note-dialog"
 
 interface NoteListProps {
   repositoryId?: string
@@ -34,6 +35,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const [sortOrder, setSortOrder] = useState<"updated_desc" | "updated_asc" | "created_desc" | "created_asc" | "title_asc" | "title_desc">("updated_desc")
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   
   // 使用 URL query 参数中的 noteId
   const currentNoteId = searchParams.get("noteId") 
@@ -112,6 +114,14 @@ export function NoteList({ repositoryId }: NoteListProps) {
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+      {repositoryId && (
+        <ImportNoteDialog 
+          open={isImportDialogOpen} 
+          onOpenChange={setIsImportDialogOpen} 
+          repositoryId={repositoryId}
+          existingNoteIds={notes?.map(n => n.id) || []}
+        />
+      )}
       <div className="flex flex-col gap-2 p-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">笔记列表</h2>
@@ -153,19 +163,49 @@ export function NoteList({ repositoryId }: NoteListProps) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button 
-                  size="icon" 
-                  variant="ghost" 
-                  onClick={() => createMutation.mutate()}
-                  disabled={createMutation.isPending}
-                  className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-              {createMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+
+              {repositoryId ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        disabled={createMutation.isPending}
+                        className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    >
+                    {createMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                        <Plus className="h-4 w-4" />
+                    )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => createMutation.mutate()}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      新建笔记
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsImportDialogOpen(true)}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      导入现有笔记
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : (
-                  <Plus className="h-4 w-4" />
+                <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    onClick={() => createMutation.mutate()}
+                    disabled={createMutation.isPending}
+                    className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                >
+                {createMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                    <Plus className="h-4 w-4" />
+                )}
+                </Button>
               )}
-              </Button>
             </div>
         </div>
         <div className="relative">
