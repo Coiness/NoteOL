@@ -37,7 +37,10 @@ export async function GET(req: NextRequest) {
 
     const repos = await prisma.repository.findMany({
       where: { userId: userId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [
+        { isDefault: 'desc' },
+        { createdAt: 'asc' }
+      ],
     })
 
     return apiSuccess(repos)

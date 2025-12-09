@@ -2,6 +2,8 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useQuery } from "@tanstack/react-query"
+import { Repository } from "@/types"
 
 import { cn } from "@/lib/utils"
 import {
@@ -18,6 +20,19 @@ export function MainNav({
 }: React.ComponentProps<typeof NavigationMenu>) {
   const pathname = usePathname()
 
+  const { data: repositories } = useQuery<Repository[]>({
+    queryKey: ["repositories"],
+    queryFn: async () => {
+      const res = await fetch("/api/repositories")
+      if (!res.ok) throw new Error("Failed to fetch repositories")
+      const data = await res.json()
+      return data.data
+    },
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const defaultRepo = repositories?.find(r => r.isDefault)
+
   return (
     <NavigationMenu className={className} {...props}>
       <NavigationMenuList>
@@ -28,10 +43,43 @@ export function MainNav({
               className={cn(
                 navigationMenuTriggerStyle(),
                 "bg-transparent",
-                pathname.startsWith("/repositories") && "bg-accent text-accent-foreground"
+                pathname === "/repositories" && "bg-accent text-accent-foreground"
               )}
             >
               我的知识库
+            </Link>
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+
+        
+        {defaultRepo && (
+          <NavigationMenuItem>
+            <NavigationMenuLink asChild>
+              <Link
+                href={`/repositories/${defaultRepo.id}`}
+                className={cn(
+                  navigationMenuTriggerStyle(),
+                  "bg-transparent",
+                  pathname === `/repositories/${defaultRepo.id}` && "bg-accent text-accent-foreground"
+                )}
+              >
+                默认知识库
+              </Link>
+            </NavigationMenuLink>
+          </NavigationMenuItem>
+        )}
+
+        <NavigationMenuItem>
+          <NavigationMenuLink asChild>
+            <Link
+              href="/settings"
+              className={cn(
+                navigationMenuTriggerStyle(),
+                "bg-transparent",
+                pathname.startsWith("/settings") && "bg-accent text-accent-foreground"
+              )}
+            >
+              个人中心
             </Link>
           </NavigationMenuLink>
         </NavigationMenuItem>
