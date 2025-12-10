@@ -46,7 +46,10 @@ export function ResizableLayout({ sidebar, children, defaultCollapsed = false }:
       </Sheet>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative bg-background transition-all duration-300">
+      <main className={cn(
+        "flex-1 flex flex-col h-full relative bg-background transition-all duration-300",
+        isDesktop ? "overflow-hidden" : "overflow-auto"
+      )}>
         {/* Toggle Buttons Area */}
         <div className="absolute top-24 left-3 z-10 flex gap-2 pointer-events-none">
             {/* Mobile Toggle */}

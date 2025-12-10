@@ -14,16 +14,9 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import { Search, FileText, Loader2, Tag, AlignLeft } from "lucide-react"
-import { Note } from "@/types"
+import { Note, SearchResults } from "@/types"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
-
-interface SearchResults {
-  title: Note[]
-  tags: Note[]
-  content: Note[]
-  repositories: Note[]
-}
 
 export function GlobalSearch() {
   const router = useRouter()

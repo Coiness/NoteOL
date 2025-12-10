@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useState, useEffect, useRef } from "react"
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -42,10 +42,16 @@ export function NoteList({ repositoryId }: NoteListProps) {
   // 使用 URL query 参数中的 noteId
   const currentNoteId = searchParams.get("noteId") 
 
-  // 获取笔记列表
-  const { data: notes, isLoading } = useQuery<Note[]>({
+  // 获取笔记列表 (无限滚动)
+  const { 
+    data, 
+    isLoading, 
+    fetchNextPage, 
+    hasNextPage, 
+    isFetchingNextPage 
+  } = useInfiniteQuery({
     queryKey: ["notes", repositoryId, debouncedSearchQuery, sortOrder],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 1 }) => {
       const [sort, order] = sortOrder.split("_")
       const sortParam = sort === "updated" ? "updatedAt" : sort === "created" ? "createdAt" : "title"
       
@@ -54,15 +60,49 @@ export function NoteList({ repositoryId }: NoteListProps) {
       if (debouncedSearchQuery) params.set("query", debouncedSearchQuery)
       params.set("sort", sortParam)
       params.set("order", order)
+      params.set("page", pageParam.toString())
+      params.set("limit", "20")
 
       const res = await fetch(`/api/notes?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch notes")
-      const data = await res.json()
-      return data.data.notes
+      const json = await res.json()
+      return json.data
     },
+    getNextPageParam: (lastPage) => {
+      if (lastPage.pagination.hasMore) {
+        return lastPage.pagination.page + 1
+      }
+      return undefined
+    },
+    initialPageParam: 1,
     staleTime: 1000 * 10, // 10秒内不重新请求
     refetchOnWindowFocus: false,
   })
+
+  const notes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
+  const observerTarget = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const currentTarget = observerTarget.current
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage) {
+          fetchNextPage()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (currentTarget) {
+      observer.observe(currentTarget)
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget)
+      }
+    }
+  }, [hasNextPage, fetchNextPage])
 
   // 创建新笔记
   const createMutation = useMutation({
@@ -248,6 +288,13 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 </div>
               </Link>
             ))}
+            
+            {/* 加载更多指示器 */}
+            <div ref={observerTarget} className="h-8 w-full flex justify-center items-center p-2">
+              {isFetchingNextPage && (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
           </div>
         )}
       </div>

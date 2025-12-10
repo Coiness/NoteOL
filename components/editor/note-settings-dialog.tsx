@@ -44,7 +44,7 @@ import {
   X
 } from "lucide-react"
 import { toast } from "sonner"
-import { Note, Repository } from "@/types"
+import { Note, Repository, Collaborator, NoteRepository } from "@/types"
 import { format } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import {
@@ -59,23 +59,6 @@ interface NoteSettingsDialogProps {
   note: Note
   trigger?: React.ReactNode
   onDelete?: () => void
-}
-
-interface Collaborator {
-  id: string
-  userId: string
-  role: "OWNER" | "ADMIN" | "EDITOR" | "VIEWER"
-  user: {
-    id: string
-    name: string | null
-    email: string | null
-    image: string | null
-  }
-  createdAt: string
-}
-
-interface NoteRepository {
-    repository: Repository
 }
 
 export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDialogProps) {

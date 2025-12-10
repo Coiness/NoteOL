@@ -20,11 +20,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
-
-interface Tag {
-  id: string
-  name: string
-}
+import { Tag } from "@/types"
 
 interface TagInputProps {
   value?: string[]

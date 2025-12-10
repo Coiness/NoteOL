@@ -20,6 +20,11 @@ export async function GET(req: NextRequest) {
     const tagId = searchParams.get("tagId")
     const sort = searchParams.get("sort") || "updatedAt"
     const order = (searchParams.get("order") || "desc") as Prisma.SortOrder
+    
+    // 分页参数
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = parseInt(searchParams.get("limit") || "20")
+    const skip = (page - 1) * limit
 
     // 构建查询条件
     const where: Prisma.NoteWhereInput = {
@@ -77,22 +82,27 @@ export async function GET(req: NextRequest) {
     }
 
     // 执行查询
-    const notes = await prisma.note.findMany({
-      where,
-      include: {
-        tags: true,
-        user: true,
-        collaborators: {
-          where: { userId: session.user.id }
+    const [total, notes] = await Promise.all([
+      prisma.note.count({ where }),
+      prisma.note.findMany({
+        where,
+        include: {
+          tags: true,
+          user: true,
+          collaborators: {
+            where: { userId: session.user.id }
+          },
+          noteRepositories: {
+            include: { repository: true }
+          }
         },
-        noteRepositories: {
-          include: { repository: true }
-        }
-      },
-      orderBy: {
-        [sort]: order
-      }
-    })
+        orderBy: {
+          [sort]: order
+        },
+        skip,
+        take: limit
+      })
+    ])
 
     // 处理返回数据，添加 role 字段
     const formattedNotes = notes.map(note => ({
@@ -100,7 +110,16 @@ export async function GET(req: NextRequest) {
       role: note.userId === session.user.id ? "OWNER" : note.collaborators[0]?.role || "VIEWER"
     }))
 
-    return apiSuccess({ notes: formattedNotes })
+    return apiSuccess({ 
+      notes: formattedNotes,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total
+      }
+    })
   } catch (error) {
     return handleApiError(error)
   }
