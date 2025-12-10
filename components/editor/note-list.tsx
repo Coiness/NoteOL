@@ -11,7 +11,9 @@ import { Plus, FileText, Loader2, Search, ArrowUpDown, Calendar, Clock, Type } f
 import { cn, stripHtml, getTagColor } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
+import { toast } from "sonner"
 import { Note } from "@/types"
+import { useDebounce } from "@/hooks/use-debounce"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +25,8 @@ import {
 
 import { NoteSettingsDialog } from "@/components/editor/note-settings-dialog"
 import { ImportNoteDialog } from "@/components/editor/import-note-dialog"
-import { useDebounce } from "@/hooks/use-debounce"
+import { useOffline } from "@/hooks/use-offline"
+import { OfflineNote } from "@/types"
 
 interface NoteListProps {
   repositoryId?: string
@@ -41,6 +44,9 @@ export function NoteList({ repositoryId }: NoteListProps) {
   
   // 使用 URL query 参数中的 noteId
   const currentNoteId = searchParams.get("noteId") 
+
+  // 离线功能
+  const { isOnline, pendingNotesCount, createOfflineNote, getOfflineNotes } = useOffline() 
 
   // 获取笔记列表 (无限滚动)
   const { 
@@ -80,6 +86,46 @@ export function NoteList({ repositoryId }: NoteListProps) {
   })
 
   const notes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
+  const [offlineNotes, setOfflineNotes] = useState<OfflineNote[]>([])
+
+  // 加载离线笔记
+  useEffect(() => {
+    const loadOfflineNotes = async () => {
+      try {
+        const notes = await getOfflineNotes()
+        setOfflineNotes(notes.filter(note => 
+          !repositoryId || note.repositoryId === repositoryId
+        ))
+      } catch (error) {
+        console.error("Failed to load offline notes:", error)
+      }
+    }
+    loadOfflineNotes()
+
+    // 监听离线笔记变化
+    const interval = setInterval(loadOfflineNotes, 2000)
+    return () => clearInterval(interval)
+  }, [repositoryId, getOfflineNotes])
+
+  // 合并在线和离线笔记
+  const allNotes = [...notes, ...offlineNotes.map(note => ({
+    ...note,
+    role: "OWNER" as const,
+    isOffline: true,
+    createdAt: note.createdAt.toISOString(),
+    updatedAt: note.updatedAt.toISOString(),
+    tags: note.tags.map(tag => ({ 
+      id: tag, 
+      name: tag, 
+      userId: "", 
+      createdAt: note.createdAt.toISOString() 
+    })) // 将 string[] 转换为 Tag[]
+  } as Note))].sort((a, b) => {
+    // 按更新时间倒序排序
+    const aTime = new Date(a.updatedAt).getTime()
+    const bTime = new Date(b.updatedAt).getTime()
+    return bTime - aTime
+  })
   const observerTarget = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -104,24 +150,45 @@ export function NoteList({ repositoryId }: NoteListProps) {
     }
   }, [hasNextPage, fetchNextPage])
 
-  // 创建新笔记
+  // 创建新笔记 (支持离线)
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+      // 如果在线，尝试直接创建
+      if (isOnline) {
+        const res = await fetch("/api/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            title: "无标题笔记",
+            repositoryId: repositoryId // 传入当前知识库ID
+          }),
+        })
+        if (!res.ok) throw new Error("Failed to create note")
+        return res.json()
+      } else {
+        // 如果离线，创建本地笔记
+        const offlineNote = await createOfflineNote({
           title: "无标题笔记",
-          repositoryId: repositoryId // 传入当前知识库ID
-        }),
-      })
-      if (!res.ok) throw new Error("Failed to create note")
-      return res.json()
+          repositoryId: repositoryId
+        })
+        return { data: offlineNote, isOffline: true }
+      }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["notes"] })
-      // 如果在知识库视图，使用 query 参数跳转
-      router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
+      
+      if (data.isOffline) {
+        // 离线创建的笔记，使用本地ID
+        toast.success("笔记已创建 (离线模式)")
+        router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
+      } else {
+        // 在线创建的笔记，使用服务器ID
+        router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
+      }
+    },
+    onError: (error) => {
+      console.error("Failed to create note:", error)
+      toast.error(isOnline ? "创建笔记失败" : "离线模式下无法创建笔记")
     },
   })
   const sortedNotes = notes || []
@@ -237,7 +304,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
           <div className="flex justify-center p-4">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        ) : sortedNotes?.length === 0 ? (
+        ) : allNotes?.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
             <FileText className="h-12 w-12 mb-2 opacity-20" />
             <p>{searchQuery ? "未找到匹配笔记" : "暂无笔记"}</p>
@@ -253,22 +320,28 @@ export function NoteList({ repositoryId }: NoteListProps) {
           </div>
         ) : (
           <div className="flex flex-col">
-            {sortedNotes?.map((note) => (
+            {allNotes?.map((note) => (
               <Link
                 key={note.id}
                 href={repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`}
                 className={cn(
                   "group flex flex-col gap-1 p-4 border-b border-sidebar-border transition-colors hover:bg-sidebar-accent/50",
-                  currentNoteId === note.id && "bg-sidebar-accent text-sidebar-accent-foreground"
+                  currentNoteId === note.id && "bg-sidebar-accent text-sidebar-accent-foreground",
+                  (note as any).isOffline && "border-l-4 border-l-orange-500"
                 )}
               >
-                <div className="font-medium truncate">
+                <div className="font-medium truncate flex items-center gap-2">
                   {note.title || "无标题笔记"}
+                  {(note as any).isOffline && (
+                    <Badge variant="outline" className="text-xs px-1 py-0 h-4 text-orange-600 border-orange-600">
+                      离线
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex gap-1 flex-wrap mb-1">
                     {note.tags?.map(tag => (
-                        <Badge key={tag.id} variant={getTagColor(tag.name)} className="text-[10px] px-1 py-0 h-4">
-                            #{tag.name}
+                        <Badge key={typeof tag === 'string' ? tag : tag.id} variant={getTagColor(typeof tag === 'string' ? tag : tag.name)} className="text-[10px] px-1 py-0 h-4">
+                            #{typeof tag === 'string' ? tag : tag.name}
                         </Badge>
                     ))}
                 </div>

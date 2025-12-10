@@ -152,11 +152,18 @@ interface NoteEditorProps {
 export function NoteEditor({ note, readOnly = false, yDoc, provider, status }: NoteEditorProps) {
   const { data: session } = useSession()
 
+  const isOfflineNote = note?.id?.startsWith('local_')
+
   return (
     <div className="relative w-full h-full bg-background">
       {/* 状态指示器 */}
       <div className="absolute top-2 right-4 z-10 flex items-center gap-2 px-2 py-1 text-xs rounded-full bg-background/80 backdrop-blur border shadow-sm">
-        {status === 'connected' ? (
+        {isOfflineNote ? (
+          <>
+            <div className="w-2 h-2 rounded-full bg-orange-500" />
+            <span className="text-muted-foreground">离线笔记</span>
+          </>
+        ) : status === 'connected' ? (
           <>
             <div className="w-2 h-2 rounded-full bg-green-500" />
             <span className="text-muted-foreground">已连接</span>

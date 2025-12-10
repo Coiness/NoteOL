@@ -13,23 +13,23 @@
 - [x] 修复 Next.js Link legacyBehavior 报错
 - [x] 修复编辑器样式问题
       [x] 8. 用户交互优化
-- [x] 自动保存 (Auto-save)
-- [x] 快捷键支持 (Hotkeys)
-- [x] 个人页面 (Profile Page)
-- [x] 知识库搜索与排序
-- [x] 笔记列表排序
-- [x] 笔记列表响应式调整 (Mobile)
-      [] 9. 性能优化
-- [ ] 预加载优化 (Preloading / PWA)
-      [x] 10. 离线编辑功能与本地缓存 (Y.js + IndexedDB)
-      [x] 11. 同步协同编程 (WebSocket + Hocuspocus)
-- [x] 集成协作服务（Hocuspocus）并实现基于 webhook 的持久化
-- [x] 前端切换为 `@hocuspocus/provider`，解决协议不兼容问题
-- [x] 统一 Y.js / lib0 / y-protocols 版本，避免二进制解码异常
-- [x] IndexedDB 容错与版本命名（使用 `_v2`）以避免旧缓存导致的问题
-      [] 12. 接入 AI 语义化平台（规划中）
-      [] 13. AI 摘要与聚类（规划中）
-      [] 14. 部署、测试、文档
+  - [x] 自动保存 (Auto-save)
+  - [x] 快捷键支持 (Hotkeys)
+  - [x] 个人页面 (Profile Page)
+  - [x] 知识库搜索与排序
+  - [x] 笔记列表排序
+  - [x] 笔记列表响应式调整 (Mobile)
+        [x] 9. 性能优化
+  - [x] 预加载优化 (Preloading / PWA)
+        [x] 10. 离线编辑功能与本地缓存 (Y.js + IndexedDB)
+        [x] 11. 同步协同编程 (WebSocket + Hocuspocus)
+  - [x] 集成协作服务（Hocuspocus）并实现基于 webhook 的持久化
+  - [x] 前端切换为 `@hocuspocus/provider`，解决协议不兼容问题
+  - [x] 统一 Y.js / lib0 / y-protocols 版本，避免二进制解码异常
+  - [x] IndexedDB 容错与版本命名（使用 `_v1`）以避免旧缓存导致的问题
+        [] 12. 接入 AI 语义化平台（规划中）
+        [] 13. AI 摘要与聚类（规划中）
+        [] 14. 部署、测试、文档
 
 下面是当前目录结构（简化与重点标注）
 NoteOL/ （主应用）

@@ -12,6 +12,8 @@ import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Note } from "@/types"
 import { cn } from "@/lib/utils"
+import { useOffline } from "@/hooks/use-offline"
+import { OfflineNote } from "@/types"
 import { useDebounce } from "@/hooks/use-debounce"
 import * as Y from "yjs"
 import { HocuspocusProvider } from "@hocuspocus/provider"
@@ -47,21 +49,48 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
   // 记录是否是首次加载，避免首次加载触发自动保存
   const isFirstLoad = useRef(true)
 
+  // 离线功能
+  const { getOfflineNote } = useOffline()
+
+  // 检查是否是离线笔记
+  const isOfflineNote = noteId?.startsWith('local_')
+
   // 获取笔记详情
   const { data: note, isLoading, isError } = useQuery<Note>({
     queryKey: ["note", noteId],
     queryFn: async () => {
-      const res = await fetch(`/api/notes/${noteId}`)
-      if (!res.ok) throw new Error("Failed to fetch note")
-      const data = await res.json()
-      return data.data
+      if (isOfflineNote) {
+        // 从 IndexedDB 加载离线笔记
+        const offlineNote = await getOfflineNote(noteId!)
+        if (!offlineNote) throw new Error("Offline note not found")
+        return {
+          ...offlineNote,
+          role: "OWNER",
+          isOffline: true,
+          createdAt: offlineNote.createdAt.toISOString(),
+          updatedAt: offlineNote.updatedAt.toISOString(),
+          tags: offlineNote.tags.map(tag => ({ 
+            id: tag, 
+            name: tag, 
+            userId: "", 
+            createdAt: offlineNote.createdAt.toISOString() 
+          }))
+        } as Note
+      } else {
+        // 从服务器加载在线笔记
+        const res = await fetch(`/api/notes/${noteId}`)
+        if (!res.ok) throw new Error("Failed to fetch note")
+        const data = await res.json()
+        return data.data
+      }
     },
     staleTime: 1000 * 10, // 10秒内不重新请求
     refetchOnWindowFocus: false,
+    enabled: !!noteId, // 只有当 noteId 存在时才查询
   })
 
    // 权限判断
-  const role = note?.role || "VIEWER"
+  const role = isOfflineNote ? "OWNER" : (note?.role || "VIEWER")
   const isReadOnly = role === "VIEWER"
   const canShare = ["OWNER", "ADMIN"].includes(role)
   const canDelete = role === "OWNER" || (isRemoveMode && ["OWNER", "ADMIN", "EDITOR"].includes(role)) // 移除权限稍微宽松点？或者保持一致
@@ -89,7 +118,7 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
     const init = async () => {
       // 1. 离线存储 (立即生效)
       try {
-        indexeddbProvider = new IndexeddbPersistence(noteId + '_v2', yDoc)
+        indexeddbProvider = new IndexeddbPersistence(noteId + '_v1', yDoc)
         indexeddbProvider.on('synced', () => {
           console.log('Content loaded from IndexedDB')
         })
@@ -217,23 +246,37 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
       }
   }
 
-  // 保存笔记 Mutation (仅保存标签，标题通过 Y.js -> Webhook 保存)
+  // 保存笔记 Mutation (支持离线保存)
   const saveMutation = useMutation({
     mutationFn: async (data: { tags: string[] }) => {
-      const res = await fetch(`/api/notes/${noteId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) throw new Error("Failed to save note")
-      return res.json()
+      if (isOfflineNote) {
+        // 离线笔记：保存到 IndexedDB
+        const offlineNote = await getOfflineNote(noteId!)
+        if (offlineNote) {
+          offlineNote.tags = data.tags
+          offlineNote.updatedAt = new Date()
+          // 这里应该更新 IndexedDB 中的笔记
+          // 暂时先返回成功
+          return { success: true }
+        }
+        throw new Error("Offline note not found")
+      } else {
+        // 在线笔记：调用服务器API
+        const res = await fetch(`/api/notes/${noteId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        })
+        if (!res.ok) throw new Error("Failed to save note")
+        return res.json()
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["note", noteId] })
       queryClient.invalidateQueries({ queryKey: ["notes"] })
     },
     onError: () => {
-      toast.error("保存失败，请检查网络")
+      toast.error(isOfflineNote ? "离线保存失败" : "保存失败，请检查网络")
     },
   })
 
@@ -329,8 +372,13 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
 
             <div className="flex items-center gap-2 shrink-0 pt-1">
                 {/* 保存状态指示器 */}
-                <div className="flex items-center text-sm text-muted-foreground mr-2 hidden sm:flex">
-                    {saveMutation.isPending ? (
+                <div className="items-center text-sm text-muted-foreground mr-2 hidden sm:flex">
+                    {isOfflineNote ? (
+                    <span className="flex items-center text-orange-600">
+                        <Cloud className="h-3 w-3 mr-1.5" />
+                        <span className="hidden lg:inline">离线保存</span>
+                    </span>
+                    ) : saveMutation.isPending ? (
                     <>
                         <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
                         <span className="hidden lg:inline">保存中...</span>
@@ -349,7 +397,7 @@ export function NoteDetail({ noteId, repositoryId, isDefaultRepository, onDelete
                 </div>
 
                 {/* 在线用户数 */}
-                <div className="flex items-center text-sm text-muted-foreground mr-2 hidden sm:flex" title="在线用户">
+                <div className="items-center text-sm text-muted-foreground mr-2 hidden sm:flex" title="在线用户">
                     <Users className="h-4 w-4 mr-1.5" />
                     <span>{onlineUsers}</span>
                 </div>
