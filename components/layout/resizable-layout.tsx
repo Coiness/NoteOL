@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { PanelLeftClose, PanelLeftOpen, Menu } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "../../hooks/use-media-query"
@@ -37,8 +37,11 @@ export function ResizableLayout({ sidebar, children, defaultCollapsed = false }:
 
       {/* Mobile Sidebar (Sheet) */}
       <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-        <SheetContent side="left" className="p-0 w-80">
-            {sidebar}
+        <SheetContent side="left" className="p-0 w-80 flex flex-col">
+            <SheetTitle className="sr-only">Sidebar</SheetTitle>
+            <div className="flex-1 overflow-hidden">
+                {sidebar}
+            </div>
         </SheetContent>
       </Sheet>
 

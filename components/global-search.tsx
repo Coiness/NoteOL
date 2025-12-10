@@ -13,17 +13,24 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { Search, FileText, Loader2, Calendar } from "lucide-react"
+import { Search, FileText, Loader2, Tag, AlignLeft } from "lucide-react"
 import { Note } from "@/types"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
+
+interface SearchResults {
+  title: Note[]
+  tags: Note[]
+  content: Note[]
+  repositories: Note[]
+}
 
 export function GlobalSearch() {
   const router = useRouter()
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
   const debouncedQuery = useDebounce(query, 300)
-  const [data, setData] = React.useState<Note[]>([])
+  const [data, setData] = React.useState<SearchResults>({ title: [], tags: [], content: [], repositories: [] })
   const [loading, setLoading] = React.useState(false)
 
   React.useEffect(() => {
@@ -40,17 +47,17 @@ export function GlobalSearch() {
 
   React.useEffect(() => {
     if (debouncedQuery.length === 0) {
-      setData([])
+      setData({ title: [], tags: [], content: [], repositories: [] })
       return
     }
 
     async function fetchData() {
       setLoading(true)
       try {
-        const res = await fetch(`/api/notes?query=${encodeURIComponent(debouncedQuery)}`)
+        const res = await fetch(`/api/search?query=${encodeURIComponent(debouncedQuery)}`)
         const json = await res.json()
         if (json.success) {
-            setData(json.data.notes)
+            setData(json.data)
         }
       } catch (error) {
         console.error(error)
@@ -80,9 +87,9 @@ export function GlobalSearch() {
           <span className="text-xs">⌘</span>K
         </kbd>
       </Button>
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput 
-            placeholder="输入关键词搜索..." 
+            placeholder="搜索笔记... (使用 #标签, @知识库, title:, content: 进行精确搜索)" 
             value={query}
             onValueChange={setQuery}
         />
@@ -96,12 +103,13 @@ export function GlobalSearch() {
                 "未找到结果"
             )}
           </CommandEmpty>
-          {data.length > 0 && (
-            <CommandGroup heading="笔记">
-              {data.map((note) => (
+          
+          {data.title.length > 0 && (
+            <CommandGroup heading="标题匹配">
+              {data.title.map((note) => (
                 <CommandItem
-                  key={note.id}
-                  value={`${note.title} ${note.id}`}
+                  key={`title-${note.id}`}
+                  value={`title-${note.title}-${note.id}`}
                   onSelect={() => handleSelect(note.id)}
                 >
                   <FileText className="mr-2 h-4 w-4" />
@@ -115,6 +123,55 @@ export function GlobalSearch() {
               ))}
             </CommandGroup>
           )}
+
+          {data.tags.length > 0 && (
+            <>
+                <CommandSeparator />
+                <CommandGroup heading="标签匹配">
+                {data.tags.map((note) => (
+                    <CommandItem
+                    key={`tag-${note.id}`}
+                    value={`tag-${note.title}-${note.id}`}
+                    onSelect={() => handleSelect(note.id)}
+                    >
+                    <Tag className="mr-2 h-4 w-4" />
+                    <div className="flex flex-col">
+                        <span>{note.title}</span>
+                        <div className="flex gap-1 mt-1">
+                            {note.tags?.map(tag => (
+                                <span key={tag.id} className="text-xs bg-muted px-1 rounded">#{tag.name}</span>
+                            ))}
+                        </div>
+                    </div>
+                    </CommandItem>
+                ))}
+                </CommandGroup>
+            </>
+          )}
+
+          {data.repositories.length > 0 && (
+            <>
+                <CommandSeparator />
+                <CommandGroup heading="知识库匹配">
+                {data.repositories.map((note) => (
+                    <CommandItem
+                    key={`repo-${note.id}`}
+                    value={`repo-${note.title}-${note.id}`}
+                    onSelect={() => handleSelect(note.id)}
+                    >
+                    <FileText className="mr-2 h-4 w-4" />
+                    <div className="flex flex-col">
+                        <span>{note.title}</span>
+                        <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true, locale: zhCN })}
+                        </span>
+                    </div>
+                    </CommandItem>
+                ))}
+                </CommandGroup>
+            </>
+          )}
+
         </CommandList>
       </CommandDialog>
     </>

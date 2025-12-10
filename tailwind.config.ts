@@ -194,6 +194,15 @@ const config: Config = {
             },
           },
         },
+        // 强制覆盖 stone 变体，防止其重置颜色
+        stone: {
+          css: {
+            '--tw-prose-pre-bg': 'var(--gh-code-bg)',
+            '--tw-prose-pre-code': 'var(--gh-fg)',
+            '--tw-prose-invert-pre-bg': 'var(--gh-code-bg)',
+            '--tw-prose-invert-pre-code': 'var(--gh-fg)',
+          }
+        }
       }),
     },
   },
