@@ -80,7 +80,12 @@ export function GlobalSearch() {
           <span className="text-xs">⌘</span>K
         </kbd>
       </Button>
-      <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
+      <CommandDialog open={open} onOpenChange={(open) => {
+        setOpen(open)
+        if (!open) {
+          setQuery('')
+        }
+      }} shouldFilter={false}>
         <CommandInput 
             placeholder="搜索笔记... (使用 #标签, @知识库, title:, content: 进行精确搜索)" 
             value={query}
@@ -90,7 +95,7 @@ export function GlobalSearch() {
           <CommandEmpty>
             {loading ? (
                 <div className="flex items-center justify-center py-6">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" data-testid="loading-spinner" />
                 </div>
             ) : (
                 "未找到结果"
