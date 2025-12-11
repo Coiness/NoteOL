@@ -8,7 +8,7 @@ export default async function NotePage(props: PageProps) {
   const params = await props.params
   return (
     <div className="h-[calc(100vh-4rem)]">
-      <NoteDetail noteId={params.noteId} />
+      <NoteDetail noteId={params.noteId} key={params.noteId} />
     </div>
   )
 }

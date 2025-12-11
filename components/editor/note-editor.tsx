@@ -20,6 +20,8 @@ import { HocuspocusProvider } from "@hocuspocus/provider"
 import { useSession } from "next-auth/react"
 import randomColor from "randomcolor"
 import { Loader2, Wifi, WifiOff } from "lucide-react"
+import { useMemo } from "react"
+import { ErrorBoundary } from "react-error-boundary"
 
 import { Note } from "@/types"
 import { cn } from "@/lib/utils"
@@ -32,6 +34,32 @@ import { TableOfContents } from "./table-of-contents"
 
 const lowlight = createLowlight(common)
 
+// 错误边界fallback组件
+function EditorErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  return (
+    <div className="flex h-full items-center justify-center p-8">
+      <div className="text-center max-w-md">
+        <div className="text-red-500 mb-4">
+          <WifiOff className="w-12 h-12 mx-auto mb-2" />
+          <h2 className="text-lg font-semibold">编辑器加载失败</h2>
+        </div>
+        <p className="text-muted-foreground mb-4 text-sm">
+          {error.message.includes('Cannot read properties of undefined') 
+            ? '协作服务连接异常，请稍后重试'
+            : '编辑器初始化失败，请刷新页面重试'
+          }
+        </p>
+        <button
+          onClick={resetErrorBoundary}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+        >
+          重试
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface TiptapEditorProps {
   yDoc: Y.Doc
   provider: HocuspocusProvider | null
@@ -40,53 +68,52 @@ interface TiptapEditorProps {
 }
 
 function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) {
+  // 使用 useMemo 延迟初始化 extensions，确保 yDoc 和 provider 稳定
+  const extensions = useMemo(() => [
+    StarterKit.configure({
+      // @ts-ignore
+      history: false, // ⚠️ 必须禁用自带历史记录，交给 Y.js
+    }),
+    Image,
+    Link.configure({
+      openOnClick: false,
+    }),
+    TaskList,
+    TaskItem.configure({
+      nested: true,
+    }),
+    Table.configure({
+      resizable: true,
+    }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    Highlight,
+    CodeBlockLowlight.configure({
+      lowlight,
+    }),
+    TabKeymap,
+    SaveShortcut,
+    SlashCommand.configure({
+      suggestion,
+    }),
+    // 协同扩展 - 只有在 yDoc 存在时才添加
+    ...(yDoc ? [Collaboration.configure({ document: yDoc })] : []),
+    // 光标扩展 - 只有在 provider 和 provider.awareness 都存在时才添加
+    ...(provider && provider.awareness ? [
+      CollaborationCursor.configure({
+        provider: provider,
+        user: {
+          name: session?.user?.name || "Anonymous",
+          color: randomColor({ luminosity: "dark" }),
+        },
+      }),
+    ] : []),
+  ], [yDoc, provider, session])  // 依赖项变化时重新计算
+
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({
-        // @ts-ignore
-        history: false, // ⚠️ 必须禁用自带历史记录，交给 Y.js
-      }),
-      Image,
-      Link.configure({
-        openOnClick: false,
-      }),
-      TaskList,
-      TaskItem.configure({
-        nested: true,
-      }),
-      Table.configure({
-        resizable: true,
-      }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      Highlight,
-      CodeBlockLowlight.configure({
-        lowlight,
-      }),
-      TabKeymap,
-      SaveShortcut,
-      SlashCommand.configure({
-        suggestion,
-      }),
-      // 协同扩展
-      Collaboration.configure({
-        document: yDoc,
-      }),
-      // 光标扩展
-      ...(provider
-        ? [
-            CollaborationCursor.configure({
-              provider: provider,
-              user: {
-                name: session?.user?.name || "Anonymous",
-                color: randomColor({ luminosity: "dark" }),
-              },
-            }),
-          ]
-        : []),
-    ],
+    extensions,
     editorProps: {
       attributes: {
         class: "prose prose-stone dark:prose-invert mx-auto focus:outline-none min-h-full px-8 py-12 pb-[30vh]",
@@ -152,6 +179,8 @@ interface NoteEditorProps {
 export function NoteEditor({ note, readOnly = false, yDoc, provider, status }: NoteEditorProps) {
   const { data: session } = useSession()
 
+  if (!yDoc) return null
+
   const isOfflineNote = note?.id?.startsWith('local_')
 
   return (
@@ -186,13 +215,15 @@ export function NoteEditor({ note, readOnly = false, yDoc, provider, status }: N
         当 provider 从 null 变为有值时，组件会销毁并重建
         这确保了 CollaborationCursor 扩展是在一个干净的环境中初始化的
       */}
-      <TiptapEditor 
-        key={provider ? 'online' : 'offline'}
-        yDoc={yDoc}
-        provider={provider}
-        readOnly={readOnly}
-        session={session}
-      />
+      <ErrorBoundary FallbackComponent={EditorErrorFallback}>
+        <TiptapEditor 
+          key={provider ? 'online' : 'offline'}
+          yDoc={yDoc}
+          provider={provider}
+          readOnly={readOnly}
+          session={session}
+        />
+      </ErrorBoundary>
     </div>
   )
 }

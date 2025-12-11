@@ -44,6 +44,7 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
       const data = await res.json()
       return data.data
     },
+    staleTime: 1000 * 60 * 5, // 5分钟内不重新请求
   })
 
   const handleSelect = (tagName: string) => {
