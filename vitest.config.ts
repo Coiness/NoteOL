@@ -11,5 +11,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './'),
     },
+    include: ['tests/unit/**/*.{test,spec}.{js,ts,tsx}', 'tests/integration/**/*.{test,spec}.{js,ts,tsx}', 'lib/**/*.{test,spec}.{js,ts,tsx}', 'app/**/*.{test,spec}.{js,ts,tsx}'],
+    exclude: ['tests/e2e/**']
   },
 })
