@@ -31,6 +31,14 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       E2E_TEST_MODE: 'true',
+      NEXTAUTH_SECRET: 'Orm9qXIQGs6hlKKlWFh5X0dZXHUqReds',
+      NEXTAUTH_URL: 'http://localhost:3000',
+      DATABASE_URL: 'postgresql://postgres:password@localhost:5432/noteol?schema=public',
+      EMAIL_SERVER_HOST: 'smtp.qq.com',
+      EMAIL_SERVER_PORT: '465',
+      EMAIL_SERVER_USER: 'coiness@qq.com',
+      EMAIL_SERVER_PASSWORD: 'ukutiidkrhdvigbb',
+      EMAIL_FROM: 'coiness@qq.com',
     },
   },
 });
