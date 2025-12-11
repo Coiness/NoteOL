@@ -54,7 +54,7 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
     }
 
     toast.success("登录成功")
-    window.location.href = "/notes"
+    window.location.href = "/repositories"
   }
 
   return (

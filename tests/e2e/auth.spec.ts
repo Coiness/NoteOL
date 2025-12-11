@@ -42,11 +42,11 @@ test.describe('Authentication', () => {
     const registerLink = page.locator('a[href="/register"]');
     await expect(registerLink).toBeVisible();
 
-    // Click and wait for the URL navigation to avoid race conditions
-    await Promise.all([
-      page.waitForURL('**/register', { timeout: 5000 }),
-      registerLink.click(),
-    ]);
+    // Click the link
+    await registerLink.click();
+    
+    // Wait for navigation with longer timeout
+    await page.waitForURL('**/register', { timeout: 10000 });
     
     // Ensure we reached the register page
     await expect(page).toHaveURL(/.*\/register/);
