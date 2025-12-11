@@ -16,20 +16,10 @@
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
-      "eslint --fix",
-      "git add"
-    ],
-    "tests/unit/**/*.{js,jsx,ts,tsx}": [
-      "vitest related --run",
-      "git add"
-    ],
-    "tests/integration/**/*.{js,jsx,ts,tsx}": [
-      "vitest related --run",
-      "git add"
+      "eslint --fix"
     ],
     "*.{json,md,css}": [
-      "prettier --write",
-      "git add"
+      "prettier --write --ignore-path .gitignore"
     ]
   },
   "dependencies": {

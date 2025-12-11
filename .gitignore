@@ -13,6 +13,9 @@
 /.next/
 /out/
 
+# bundle analyzer
+webpack-stats.json
+
 # production
 /build
 
