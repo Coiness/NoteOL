@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
+    "build:dev": "next build --webpack",
     "build": "prisma generate && npx prisma migrate deploy && next build --webpack",
     "build:analyze": "cross-env ANALYZE=true npm run build -- --webpack",
     "build:profile": "npm run build -- --profile",
