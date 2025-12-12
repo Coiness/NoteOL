@@ -40,20 +40,43 @@ import {
 } from "@/components/ui/alert-dialog"
 import { RepositoryDialog } from "./repository-dialog"
 import { Repository } from "@/types"
+import { useOffline } from "@/app/hooks/use-offline"
 
 export function RepositoryList() {
   const queryClient = useQueryClient()
   const [editingRepo, setEditingRepo] = useState<Repository | null>(null)
   const [deletingRepo, setDeletingRepo] = useState<Repository | null>(null)
 
+  // 获取离线功能
+  const { isOnline, cacheRepositories, getCachedRepositories } = useOffline()
+
   const { data: repositories, isLoading } = useQuery<Repository[]>({
     queryKey: ["repositories"],
     queryFn: async () => {
-      const res = await fetch("/api/repositories")
-      if (!res.ok) throw new Error("Failed to fetch repositories")
-      const data = await res.json()
-      return data.data
+      // 在线时从服务器获取并缓存
+      if (isOnline) {
+        try {
+          const res = await fetch("/api/repositories")
+          if (!res.ok) throw new Error("Failed to fetch repositories")
+          const data = await res.json()
+          const repos = data.data
+
+          // 缓存到 IndexedDB
+          await cacheRepositories(repos)
+
+          return repos
+        } catch (error) {
+          console.log("Failed to fetch from server, trying cache:", error)
+          // 服务器请求失败时，回退到缓存
+          return await getCachedRepositories()
+        }
+      } else {
+        // 离线时从缓存获取
+        console.log("Offline mode: loading repositories from cache")
+        return await getCachedRepositories()
+      }
     },
+    staleTime: 1000 * 60 * 5, // 5分钟内不重新请求
   })
 
   const deleteMutation = useMutation({
