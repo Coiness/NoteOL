@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useState, useEffect, useRef, memo } from "react"
 import Link from "next/link"
-import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -11,8 +10,6 @@ import { Plus, FileText, Loader2, Search, ArrowUpDown, Calendar, Clock, Type } f
 import { cn, stripHtml, getTagColor } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
-import { toast } from "sonner"
-import { Note } from "@/types"
 import { useDebounce } from "@/app/hooks/use-debounce"
 import {
   DropdownMenu,
@@ -22,26 +19,110 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
-
 import { NoteSettingsDialog } from "@/components/editor/note-settings-dialog"
 import { ImportNoteDialog } from "@/components/editor/import-note-dialog"
-import { useOffline } from "@/app/hooks/use-offline"
-import { OfflineNote } from "@/types"
+import { useNoteList } from "@/app/hooks/use-note-list"
+import { useNoteOperations } from "@/app/hooks/use-note-operations"
+import type { Note } from "@/types/note"
 
 interface NoteListProps {
   repositoryId?: string
 }
 
+// 笔记项组件 - 使用 memo 避免不必要的重新渲染
+const NoteItem = memo(({ 
+  note, 
+  repositoryId, 
+  currentNoteId, 
+  onSettingsClick 
+}: { 
+  note: Note & { isOffline?: boolean }
+  repositoryId?: string
+  currentNoteId?: string | null
+  onSettingsClick: (e: React.MouseEvent) => void
+}) => {
+  const href = repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`
+  
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "group flex flex-col gap-1 p-4 border-b border-sidebar-border transition-colors hover:bg-sidebar-accent/50",
+        currentNoteId === note.id && "bg-sidebar-accent text-sidebar-accent-foreground",
+        note.isOffline && "border-l-4 border-l-orange-500"
+      )}
+    >
+      <div className="font-medium truncate flex items-center gap-2">
+        {note.title || "无标题笔记"}
+        {note.isOffline && (
+          <Badge variant="outline" className="text-xs px-1 py-0 h-4 text-orange-600 border-orange-600">
+            离线
+          </Badge>
+        )}
+      </div>
+      <div className="flex gap-1 flex-wrap mb-1">
+        {note.tags?.map(tag => (
+          <Badge 
+            key={typeof tag === 'string' ? tag : tag.id} 
+            variant={getTagColor(typeof tag === 'string' ? tag : tag.name)} 
+            className="text-[10px] px-1 py-0 h-4"
+          >
+            #{typeof tag === 'string' ? tag : tag.name}
+          </Badge>
+        ))}
+      </div>
+      <div className="text-xs text-muted-foreground flex justify-between items-center">
+        <span className="truncate max-w-[150px]">
+          {stripHtml(note.content || "").slice(0, 30) || "无内容"}
+        </span>
+        <div className="flex items-center gap-2" onClick={onSettingsClick}>
+          <span className="text-[10px]">
+            {formatDistanceToNow(new Date(note.updatedAt), { 
+              addSuffix: true,
+              locale: zhCN 
+            })}
+          </span>
+          <NoteSettingsDialog note={note} />
+        </div>
+      </div>
+    </Link>
+  )
+})
+
+NoteItem.displayName = "NoteItem"
+
+// 虚拟化列表项渲染组件
+const VirtualizedNoteItem = ({ index, style, data }: { index: number; style: React.CSSProperties; data: any }) => {
+  const note = data.notes[index]
+  return (
+    <div style={style}>
+      <NoteItem
+        note={note}
+        repositoryId={data.repositoryId}
+        currentNoteId={data.currentNoteId}
+        onSettingsClick={data.onSettingsClick}
+      />
+    </div>
+  )
+}
+
 export function NoteList({ repositoryId }: NoteListProps) {
   const params = useParams()
   const searchParams = useSearchParams()
-  const router = useRouter()
-  const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearchQuery = useDebounce(searchQuery, 500)
   const [sortOrder, setSortOrder] = useState<"updated_desc" | "updated_asc" | "created_desc" | "created_asc" | "title_asc" | "title_desc">("updated_desc")
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
-  
+
+  // 使用分离的 hooks
+  const { allNotes, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useNoteList({
+    repositoryId,
+    searchQuery: debouncedSearchQuery,
+    sortOrder
+  })
+
+  const { createMutation, isOnline } = useNoteOperations({ repositoryId })
+
   // 获取当前排序的显示文本
   const getCurrentSortLabel = () => {
     switch (sortOrder) {
@@ -72,180 +153,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
   }
   
   // 使用 URL query 参数中的 noteId
-  const currentNoteId = searchParams.get("noteId") 
-
-  // 离线功能
-  const { isOnline, pendingNotesCount, createOfflineNote, getOfflineNotes } = useOffline() 
-
-  // 获取笔记列表 (无限滚动)
-  const { 
-    data, 
-    isLoading, 
-    fetchNextPage, 
-    hasNextPage, 
-    isFetchingNextPage 
-  } = useInfiniteQuery({
-    queryKey: ["notes", repositoryId, debouncedSearchQuery, sortOrder],
-    queryFn: async ({ pageParam = 1 }) => {
-      const [sort, order] = sortOrder.split("_")
-      const sortParam = sort === "updated" ? "updatedAt" : sort === "created" ? "createdAt" : "title"
-      
-      const params = new URLSearchParams()
-      if (repositoryId) params.set("repositoryId", repositoryId)
-      if (debouncedSearchQuery) params.set("query", debouncedSearchQuery)
-      params.set("sort", sortParam)
-      params.set("order", order)
-      params.set("page", pageParam.toString())
-      params.set("limit", "20")
-
-      const res = await fetch(`/api/notes?${params.toString()}`)
-      if (!res.ok) throw new Error("Failed to fetch notes")
-      const json = await res.json()
-      return json.data
-    },
-    getNextPageParam: (lastPage) => {
-      if (lastPage.pagination.hasMore) {
-        return lastPage.pagination.page + 1
-      }
-      return undefined
-    },
-    initialPageParam: 1,
-    staleTime: 1000 * 10, // 10秒内不重新请求
-    refetchOnWindowFocus: false,
-  })
-
-  const notes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
-  const [offlineNotes, setOfflineNotes] = useState<OfflineNote[]>([])
-
-  // 加载离线笔记
-  useEffect(() => {
-    const loadOfflineNotes = async () => {
-      try {
-        const notes = await getOfflineNotes()
-        setOfflineNotes(notes.filter(note => 
-          !repositoryId || note.repositoryId === repositoryId
-        ))
-      } catch (error) {
-        console.error("Failed to load offline notes:", error)
-      }
-    }
-    loadOfflineNotes()
-
-    // 监听离线笔记变化
-    const interval = setInterval(loadOfflineNotes, 2000)
-    return () => clearInterval(interval)
-  }, [repositoryId, getOfflineNotes])
-
-  // 合并在线和离线笔记，并按当前排序规则排序
-  const allNotes = [...notes, ...offlineNotes.map(note => ({
-    ...note,
-    role: "OWNER" as const,
-    isOffline: true,
-    createdAt: note.createdAt.toISOString(),
-    updatedAt: note.updatedAt.toISOString(),
-    tags: note.tags.map(tag => ({ 
-      id: tag, 
-      name: tag, 
-      userId: "", 
-      createdAt: note.createdAt.toISOString() 
-    })) // 将 string[] 转换为 Tag[]
-  } as Note))].sort((a, b) => {
-    // 根据当前排序规则排序
-    const [sortField, sortDirection] = sortOrder.split("_")
-    const multiplier = sortDirection === "desc" ? -1 : 1
-    
-    let aValue: any, bValue: any
-    
-    switch (sortField) {
-      case "updated":
-        aValue = new Date(a.updatedAt).getTime()
-        bValue = new Date(b.updatedAt).getTime()
-        break
-      case "created":
-        aValue = new Date(a.createdAt || a.updatedAt).getTime()
-        bValue = new Date(b.createdAt || b.updatedAt).getTime()
-        break
-      case "title":
-        aValue = (a.title || "").toLowerCase()
-        bValue = (b.title || "").toLowerCase()
-        break
-      default:
-        aValue = new Date(a.updatedAt).getTime()
-        bValue = new Date(b.updatedAt).getTime()
-    }
-    
-    if (typeof aValue === "string") {
-      return aValue.localeCompare(bValue) * multiplier
-    }
-    
-    return (aValue - bValue) * multiplier
-  })
-  const observerTarget = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const currentTarget = observerTarget.current
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasNextPage) {
-          fetchNextPage()
-        }
-      },
-      { threshold: 0.1 }
-    )
-
-    if (currentTarget) {
-      observer.observe(currentTarget)
-    }
-
-    return () => {
-      if (currentTarget) {
-        observer.unobserve(currentTarget)
-      }
-    }
-  }, [hasNextPage, fetchNextPage])
-
-  // 创建新笔记 (支持离线)
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      // 如果在线，尝试直接创建
-      if (isOnline) {
-        const res = await fetch("/api/notes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            title: "无标题笔记",
-            repositoryId: repositoryId // 传入当前知识库ID
-          }),
-        })
-        if (!res.ok) throw new Error("Failed to create note")
-        return res.json()
-      } else {
-        // 如果离线，创建本地笔记
-        const offlineNote = await createOfflineNote({
-          title: "无标题笔记",
-          repositoryId: repositoryId
-        })
-        return { data: offlineNote, isOffline: true }
-      }
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["notes"] })
-      
-      if (data.isOffline) {
-        // 离线创建的笔记，使用本地ID
-        toast.success("笔记已创建 (离线模式)")
-        router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
-      } else {
-        // 在线创建的笔记，使用服务器ID
-        router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
-      }
-    },
-    onError: (error) => {
-      console.error("Failed to create note:", error)
-      toast.error(isOnline ? "创建笔记失败" : "离线模式下无法创建笔记")
-    },
-  })
-  const sortedNotes = notes || []
+  const currentNoteId = searchParams.get("noteId")
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -394,54 +302,15 @@ export function NoteList({ repositoryId }: NoteListProps) {
           </div>
         ) : (
           <div className="flex flex-col">
-            {allNotes?.map((note) => (
-              <Link
+            {allNotes.map((note) => (
+              <NoteItem
                 key={note.id}
-                href={repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`}
-                className={cn(
-                  "group flex flex-col gap-1 p-4 border-b border-sidebar-border transition-colors hover:bg-sidebar-accent/50",
-                  currentNoteId === note.id && "bg-sidebar-accent text-sidebar-accent-foreground",
-                  (note as any).isOffline && "border-l-4 border-l-orange-500"
-                )}
-              >
-                <div className="font-medium truncate flex items-center gap-2">
-                  {note.title || "无标题笔记"}
-                  {(note as any).isOffline && (
-                    <Badge variant="outline" className="text-xs px-1 py-0 h-4 text-orange-600 border-orange-600">
-                      离线
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex gap-1 flex-wrap mb-1">
-                    {note.tags?.map(tag => (
-                        <Badge key={typeof tag === 'string' ? tag : tag.id} variant={getTagColor(typeof tag === 'string' ? tag : tag.name)} className="text-[10px] px-1 py-0 h-4">
-                            #{typeof tag === 'string' ? tag : tag.name}
-                        </Badge>
-                    ))}
-                </div>
-                <div className="text-xs text-muted-foreground flex justify-between items-center">
-                  <span className="truncate max-w-[150px]">
-                    {stripHtml(note.content || "").slice(0, 30) || "无内容"}
-                  </span>
-                  <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
-                    <span className="text-[10px]">
-                        {formatDistanceToNow(new Date(note.updatedAt), { 
-                            addSuffix: true,
-                            locale: zhCN 
-                        })}
-                    </span>
-                    <NoteSettingsDialog note={note} />
-                  </div>
-                </div>
-              </Link>
+                note={note}
+                repositoryId={repositoryId}
+                currentNoteId={currentNoteId}
+                onSettingsClick={(e) => e.preventDefault()}
+              />
             ))}
-            
-            {/* 加载更多指示器 */}
-            <div ref={observerTarget} className="h-8 w-full flex justify-center items-center p-2">
-              {isFetchingNextPage && (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              )}
-            </div>
           </div>
         )}
       </div>
