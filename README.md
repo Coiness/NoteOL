@@ -33,6 +33,74 @@ npx prisma migrate dev
 npm run dev
 ```
 
+## Docker 部署
+
+如果你想快速部署到本地环境（无需手动配置数据库和环境变量），可以使用 Docker 一键部署。
+
+### 前提条件
+
+- 安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+### 部署步骤
+
+1. **克隆项目**（如果还没有的话）：
+
+```bash
+git clone <your-repo-url>
+cd NoteOL
+```
+
+2. **一键启动**：
+
+   **Windows 用户**：双击运行项目根目录下的 `start-docker.bat` 文件
+
+   **或手动运行**：
+
+   ```bash
+   docker-compose up -d --build
+   ```
+
+3. **等待启动完成**：
+
+   脚本会自动：
+   - 构建应用镜像
+   - 启动 PostgreSQL 数据库
+   - 运行数据库迁移（创建表结构）
+   - 启动 Next.js 应用
+
+4. **访问应用**：
+
+   打开浏览器访问：http://localhost:3000
+
+### 首次使用
+
+1. 访问 http://localhost:3000
+2. 点击"注册"，输入你的邮箱地址
+3. 检查邮箱，输入验证码完成注册
+4. 开始使用笔记功能！
+
+### 服务说明
+
+- **应用服务**：运行在 http://localhost:3000
+- **数据库服务**：PostgreSQL 运行在本地端口 5432
+- **数据持久化**：数据库数据存储在 Docker 卷中，重启不会丢失
+
+### 停止和清理
+
+```bash
+# 停止服务
+docker-compose down
+
+# 停止服务并删除数据卷（慎用，会删除所有数据）
+docker-compose down -v
+```
+
+### 故障排除
+
+- 如果启动失败，检查 Docker Desktop 是否正在运行
+- 查看服务日志：`docker-compose logs`
+- 重启服务：`docker-compose restart`
+
 ## 开发命令
 
 - 运行测试：`npm test` (Vitest)
