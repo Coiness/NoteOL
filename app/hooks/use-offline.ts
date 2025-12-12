@@ -363,6 +363,7 @@ let globalRefreshCallback: (() => void) | null = null
 // React Hook for offline functionality
 export function useOffline() {
   const [isOnline, setIsOnline] = useState(false)
+  const [isReady, setIsReady] = useState(false)
   const [pendingNotesCount, setPendingNotesCount] = useState(0)
   const [isClient, setIsClient] = useState(false)
   const queryClient = useQueryClient()
@@ -371,6 +372,7 @@ export function useOffline() {
   useEffect(() => {
     setIsClient(true)
     setIsOnline(navigator.onLine)
+    setIsReady(true) // 网络状态已初始化
   }, [])
 
   // 更新待同步笔记数量
@@ -485,6 +487,7 @@ export function useOffline() {
 
   return {
     isOnline,
+    isReady,
     pendingNotesCount,
     createOfflineNote,
     updateOfflineNote,
