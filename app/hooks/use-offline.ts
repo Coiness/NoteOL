@@ -173,6 +173,17 @@ class OfflineManager {
     })
   }
 
+  // 更新离线笔记
+  async updateOfflineNote(noteId: string, updates: Partial<OfflineNote>): Promise<void> {
+    if (!this.db) await this.initDB()
+
+    const note = await this.getOfflineNote(noteId)
+    if (note) {
+      const updatedNote = { ...note, ...updates, updatedAt: new Date() }
+      await this.saveOfflineNote(updatedNote)
+    }
+  }
+
   // 同步待处理的笔记到服务器
   async syncPendingNotes(): Promise<SyncResult[]> {
     if (!this.isOnline) return []
@@ -325,6 +336,7 @@ export function useOffline() {
     isOnline,
     pendingNotesCount,
     createOfflineNote: isClient ? offlineManager.createOfflineNote.bind(offlineManager) : async () => { throw new Error('Not available on server') },
+    updateOfflineNote: isClient ? offlineManager.updateOfflineNote.bind(offlineManager) : async () => {},
     syncPendingOperations: isClient ? offlineManager.syncPendingOperations.bind(offlineManager) : async () => {},
     getOfflineNotes: isClient ? offlineManager.getOfflineNotes.bind(offlineManager) : async () => [],
     getOfflineNote: isClient ? offlineManager.getOfflineNote.bind(offlineManager) : async () => null,

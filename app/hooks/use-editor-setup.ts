@@ -41,7 +41,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
   const isFirstLoad = useRef(true)
 
   // 离线功能
-  const { getOfflineNote } = useOffline()
+  const { getOfflineNote, updateOfflineNote } = useOffline()
 
   // 检查是否是离线笔记
   const isOfflineNote = noteId?.startsWith('local_')
@@ -223,15 +223,9 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
   const saveMutation = useMutation({
     mutationFn: async (data: { tags: string[] }) => {
       if (isOfflineNote) {
-        // 离线笔记：保存到 IndexedDB
-        const offlineNote = await getOfflineNote(noteId!)
-        if (offlineNote) {
-          offlineNote.tags = data.tags
-          offlineNote.updatedAt = new Date()
-          // 这里应该更新 IndexedDB 中的笔记
-          return { success: true }
-        }
-        throw new Error("Offline note not found")
+        // 离线笔记：更新 IndexedDB 中的笔记
+        await updateOfflineNote(noteId!, { tags: data.tags })
+        return { success: true }
       } else {
         // 在线笔记：调用服务器API
         const res = await fetch(`/api/notes/${noteId}`, {
