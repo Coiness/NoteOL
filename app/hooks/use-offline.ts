@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import * as Y from 'yjs'
 import { OfflineNote, OfflineOperation, SyncResult } from '@/types'
-import { useDebounce } from './use-debounce'
+import { useDebounce } from '@/app/hooks/use-debounce'
 
 // IndexedDB 数据库名称和版本
 const DB_NAME = 'noteol_offline'

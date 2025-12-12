@@ -78,6 +78,7 @@
     "react-dom": "^19.2.0",
     "react-error-boundary": "^6.0.0",
     "react-hook-form": "^7.67.0",
+    "react-window": "^2.2.3",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tippy.js": "^6.3.7",

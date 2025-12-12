@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { PanelLeftClose, PanelLeftOpen, Menu } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useMediaQuery } from "../../hooks/use-media-query"
+import { useMediaQuery } from "@/app/hooks/use-media-query"
 
 interface ResizableLayoutProps {
   sidebar: React.ReactNode

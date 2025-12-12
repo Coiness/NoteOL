@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { useOffline } from '@/hooks/use-offline'
+import { useOffline } from '@/app/hooks/use-offline'
 
 // Mock IndexedDB for testing
 const mockIndexedDB = {

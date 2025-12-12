@@ -1,7 +1,7 @@
 "use client"
 
 import { Editor } from "@tiptap/react"
-import { useTableOfContents } from "./hooks/use-table-of-contents"
+import { useTableOfContents } from "@/app/hooks/use-table-of-contents"
 import { cn } from "@/lib/utils"
 
 interface TableOfContentsProps {

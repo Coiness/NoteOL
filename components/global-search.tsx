@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { useDebounce } from "@/hooks/use-debounce"
+import { useDebounce } from "@/app/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
 import {
   CommandDialog,

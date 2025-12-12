@@ -13,7 +13,7 @@ import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { toast } from "sonner"
 import { Note } from "@/types"
-import { useDebounce } from "@/hooks/use-debounce"
+import { useDebounce } from "@/app/hooks/use-debounce"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,7 +25,7 @@ import {
 
 import { NoteSettingsDialog } from "@/components/editor/note-settings-dialog"
 import { ImportNoteDialog } from "@/components/editor/import-note-dialog"
-import { useOffline } from "@/hooks/use-offline"
+import { useOffline } from "@/app/hooks/use-offline"
 import { OfflineNote } from "@/types"
 
 interface NoteListProps {
