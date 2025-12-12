@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma"
 import { noteUpdateSchema } from "@/lib/validations/note"
 import { apiSuccess, handleApiError, AppError } from "@/lib/api-response"
 
+// In-memory request dedupe map to avoid duplicated operations from the same client
+const recentRequestIds: Map<string, number> = new Map()
+const DEDUPE_WINDOW_MS = 10 * 1000 // 10 seconds
+
 async function verifyNoteOwnership(noteId: string, userId: string) {
     const note = await prisma.note.findUnique({
         where: { id: noteId },
@@ -76,6 +80,28 @@ export async function PUT(req: NextRequest, props: RouteProps) {
         const session = await getServerSession(authOptions)
         if (!session?.user?.id) throw new AppError("Unauthorized", 401)
 
+        const requestId = req.headers.get('x-request-id') || 'unknown'
+
+        // Simple dedupe: if a recent request with same id was processed, skip
+        if (requestId !== 'unknown') {
+            const last = recentRequestIds.get(requestId)
+            if (last && Date.now() - last < DEDUPE_WINDOW_MS) {
+
+                const current = await prisma.note.findUnique({
+                    where: { id: params.noteId },
+                    include: { tags: true }
+                })
+                return apiSuccess(current)
+            }
+            recentRequestIds.set(requestId, Date.now())
+            // cleanup old entries every time we set one
+            if (recentRequestIds.size > 2000) {
+                const cutoff = Date.now() - DEDUPE_WINDOW_MS
+                for (const [id, ts] of recentRequestIds) {
+                    if (ts < cutoff) recentRequestIds.delete(id)
+                }
+            }
+        }
         const json = await req.json()
         const body = noteUpdateSchema.parse(json)
         
@@ -112,19 +138,45 @@ export async function PUT(req: NextRequest, props: RouteProps) {
             }
 
             if (body.tags) {
-                const tagConnects = []
                 // 去重并过滤空标签
                 const uniqueTags = Array.from(new Set(body.tags.filter(t => t.trim() !== "")))
-                
-                for (const tagName of uniqueTags) {
-                     const tag = await tx.tag.upsert({
-                        where: { name_userId: { name: tagName, userId: session.user.id } },
-                        create: { name: tagName, userId: session.user.id },
-                        update: {}
+                if (uniqueTags.length > 0) {
+                    // 1) 找出已存在的 tags
+                    const existing = await tx.tag.findMany({
+                        where: {
+                            userId: session.user.id,
+                            name: { in: uniqueTags }
+                        },
+                        select: { id: true, name: true }
                     })
-                    tagConnects.push({ id: tag.id })
+
+                    const existingNames = new Set(existing.map(t => t.name))
+                    const toCreate = uniqueTags.filter(n => !existingNames.has(n))
+
+                    // 2) 批量创建缺失的 tags
+                    if (toCreate.length > 0) {
+                        // createMany 支持 skipDuplicates
+                        await tx.tag.createMany({
+                            data: toCreate.map(name => ({ name, userId: session.user.id })),
+                            skipDuplicates: true
+                        })
+                        // 查询一次拿到所有 tag ids
+                    }
+
+                    const allTags = await tx.tag.findMany({
+                        where: {
+                            userId: session.user.id,
+                            name: { in: uniqueTags }
+                        },
+                        select: { id: true }
+                    })
+
+                    const tagConnects = allTags.map(t => ({ id: t.id }))
+                    data.tags = { set: tagConnects }
+                } else {
+                    // 如果 tags 变为空，清空关联
+                    data.tags = { set: [] }
                 }
-                data.tags = { set: tagConnects }
             }
 
             return await tx.note.update({

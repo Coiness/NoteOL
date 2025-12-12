@@ -74,7 +74,7 @@ export async function POST(req: Request) {
         isDefault: true,
       },
     })
-    console.log("5.将笔记加入用户默认知识库:", defaultRepo)
+
 
     // 如果没有默认知识库，创建一个
     if (!defaultRepo) {
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
           },
         },
       })
-      console.log("是否已经关联: ",existingRepoLink)
+
 
       if (!existingRepoLink) {
         await prisma.noteRepository.create({

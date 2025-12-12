@@ -24,6 +24,7 @@ export default function RepositoryPage() {
       return data.data
     },
     enabled: !!repoId
+    ,staleTime: 1000 * 60 // 1 minute cache for repo details
   })
 
   const handleNoteDelete = () => {

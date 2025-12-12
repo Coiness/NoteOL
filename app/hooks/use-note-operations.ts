@@ -41,7 +41,12 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["notes"] })
+      // 只刷新与当前 repository 相关的 notes 查询，避免全量刷新
+      if (repositoryId) {
+        queryClient.invalidateQueries({ queryKey: ["notes", repositoryId] })
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["notes"] })
+      }
 
       if (data.isOffline) {
         // 离线创建的笔记，使用本地ID

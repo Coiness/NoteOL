@@ -58,6 +58,7 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
       return data.data
     },
     enabled: isOpen,
+    staleTime: 1000 * 60, // 1 minute - reduce refetch frequency
   })
 
   // 获取协作者列表
@@ -70,6 +71,7 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
       return data.data
     },
     enabled: isOpen,
+    staleTime: 1000 * 30, // 30 seconds - collaborators don't change that frequently
   })
 
   // 从知识库移除 Mutation
@@ -102,7 +104,13 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
       if (!res.ok) throw new Error("Failed to delete note")
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notes"] })
+      // 尽量只刷新与该笔记所在知识库相关的 notes 查询
+      const repoIds = noteData?.noteRepositories?.map(nr => nr.repository.id) || []
+      if (repoIds.length > 0) {
+        repoIds.forEach(id => queryClient.invalidateQueries({ queryKey: ["notes", id] }))
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["notes"] })
+      }
       toast.success("笔记已删除")
       setIsOpen(false)
       if (onDelete) onDelete()

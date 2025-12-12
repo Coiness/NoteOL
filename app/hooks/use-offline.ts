@@ -175,18 +175,13 @@ class OfflineManager {
 
   // 更新离线笔记
   async updateOfflineNote(noteId: string, updates: Partial<OfflineNote>): Promise<void> {
-    console.log('[DEBUG] updateOfflineNote called:', noteId, 'updates:', updates)
     if (!this.db) await this.initDB()
 
     const note = await this.getOfflineNote(noteId)
     if (note) {
-      console.log('[DEBUG] Found note to update:', note.title, 'current tags:', note.tags)
       const updatedNote = { ...note, ...updates, updatedAt: new Date() }
-      console.log('[DEBUG] Updated note will be:', updatedNote.title, 'new tags:', updatedNote.tags)
       await this.saveOfflineNote(updatedNote)
-      console.log('[DEBUG] Note saved successfully')
     } else {
-      console.log('[DEBUG] Note not found:', noteId)
     }
   }
 
@@ -336,19 +331,14 @@ export function useOffline() {
 
   // 设置全局刷新回调
   const setGlobalRefreshCallback = useCallback((callback: () => void) => {
-    console.log('[DEBUG] Setting global refresh callback')
     globalRefreshCallback = callback
   }, [])
 
   // 触发全局刷新
   const triggerGlobalRefresh = useCallback(() => {
-    console.log('[DEBUG] triggerGlobalRefresh called, callback exists:', !!globalRefreshCallback)
     if (globalRefreshCallback) {
-      console.log('[DEBUG] Executing global refresh callback')
       globalRefreshCallback()
-      console.log('[DEBUG] Global refresh callback executed')
     } else {
-      console.log('[DEBUG] No global refresh callback set')
     }
   }, [])
 

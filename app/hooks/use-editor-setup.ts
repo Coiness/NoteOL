@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import type { Query } from "@tanstack/query-core"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useDebounce } from "@/app/hooks/use-debounce"
@@ -99,7 +100,6 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
       try {
         indexeddbProvider = new IndexeddbPersistence(noteId + '_v1', yDoc)
         indexeddbProvider.on('synced', () => {
-          console.log('Content loaded from IndexedDB')
         })
       } catch (err) {
         console.error('[IndexedDB] failed to initialize', err)
@@ -191,7 +191,6 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
     const isNewNote = loadedNoteId.current !== noteId
     
     if (isNewNote) {
-      console.log('[DEBUG] Initializing state for new note:', noteId)
       loadedNoteId.current = noteId
       
       // 首次加载：总是从 DB 同步
@@ -204,13 +203,12 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
         // 防止 saveMutation -> invalidate -> useQuery -> useEffect 流程导致的
         // "数据库旧数据覆盖本地新数据" 的 Bug。
         // 所以这里什么都不做，保持本地 tags 不变。
-        console.log('[DEBUG] Offline note update received, ignoring tags sync to prevent overwrite')
       } else {
         // 在线模式：可能由协作者修改，需要同步（这里可以进一步优化冲突逻辑，但暂且保持原样）
         const newTags = note.tags?.map(t => t.name) || []
         setTags(prev => {
           if (JSON.stringify(prev) !== JSON.stringify(newTags)) {
-            console.log('[DEBUG] Syncing tags from server:', newTags)
+
             return newTags
           }
           return prev
@@ -231,7 +229,6 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
     // 3. 标记首次加载完成 (移出 isSynced 判断，只要 note 加载了就允许 Tag 自动保存)
     if (isFirstLoad.current && note) {
       setTimeout(() => {
-        console.log('[DEBUG] Enabling auto-save (isFirstLoad -> false)')
         isFirstLoad.current = false
       }, 1000)
     }
@@ -244,7 +241,6 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
       const yTitle = yDoc.getText('title')
       if (yTitle.toString() !== newTitle) {
-          console.log('[DEBUG] Title changed locally:', newTitle)
           yDoc.transact(() => {
               yTitle.delete(0, yTitle.length)
               yTitle.insert(0, newTitle)
@@ -252,9 +248,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
           // 如果是离线笔记，同时更新 IndexedDB 中的元数据
           if (isOfflineNote) {
-            console.log('[DEBUG] Updating offline note title:', noteId, newTitle)
             updateOfflineNote(noteId!, { title: newTitle }).then(() => {
-              console.log('[DEBUG] Offline note title updated, triggering global refresh')
               // 立即触发离线笔记列表刷新
               triggerGlobalRefresh()
             }).catch(error => {
@@ -267,32 +261,53 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
   // 保存笔记 Mutation (支持离线保存)
   const saveMutation = useMutation({
     mutationFn: async (data: { title?: string; tags?: string[] }) => {
-      console.log('[DEBUG] saveMutation called with:', data)
       if (isOfflineNote) {
         // 离线笔记：更新 IndexedDB 中的笔记
         await updateOfflineNote(noteId!, data)
         return { success: true }
       } else {
         // 在线笔记：调用服务器API
+        // 生成请求ID并发送到服务器，用于追踪重复请求
+        const requestId = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2,10)}`
         const res = await fetch(`/api/notes/${noteId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
           body: JSON.stringify(data),
         })
         if (!res.ok) throw new Error("Failed to save note")
         return res.json()
       }
     },
-    onSuccess: () => {
-      if (isOfflineNote) {
-        console.log('[DEBUG] Tags save successful for offline note')
-        // 离线笔记：触发列表刷新 (解决左侧列表不更新问题)
-        triggerGlobalRefresh()
-        // 同时也需要刷新当前笔记的查询缓存，确保本地状态与 DB 保持一致
-        // 注意：由于上面的 useEffect 修复，这里刷新不会导致 Tag 闪烁/消失
-        queryClient.invalidateQueries({ queryKey: ["note", noteId] })
-      } else {
-        // 在线笔记：通过 React Query 刷新
+    onSuccess: (res: any) => {
+      // 使用更细粒度的缓存更新，避免重复触发全量刷新
+      try {
+        if (isOfflineNote) {
+
+          // 离线笔记：触发列表刷新 (解决左侧列表不更新问题)
+          triggerGlobalRefresh()
+          // 更新当前笔记缓存
+          queryClient.setQueryData(["note", noteId], (old: any) => ({ ...(old || {}), ...(res?.data || {}) }))
+        } else {
+          const updated = res?.data || res
+          // 更新单个笔记缓存
+          queryClient.setQueryData(["note", noteId], (old: any) => ({ ...(old || {}), ...(updated || {}) }))
+
+          // 更新所有 notes 查询中的该笔记条目，避免 invalidate 全量刷新
+          const notesQueries = queryClient.getQueryCache().findAll({ predicate: (query: Query) => Array.isArray(query.queryKey) && query.queryKey[0] === "notes" })
+          notesQueries.forEach(q => {
+            queryClient.setQueryData(q.queryKey, (old: any) => {
+              if (!old || !old.pages) return old
+              const pages = old.pages.map((page: any) => ({
+                ...page,
+                notes: page.notes.map((n: any) => n.id === (updated as any).id ? { ...n, ...(updated as any) } : n)
+              }))
+              return { ...old, pages }
+            })
+          })
+        }
+      } catch (e) {
+        console.error('[DEBUG] Failed to update cache after saveMutation', e)
+        // fallback: 保持原有的刷新行为
         queryClient.invalidateQueries({ queryKey: ["note", noteId] })
         queryClient.invalidateQueries({ queryKey: ["notes"] })
       }
@@ -305,22 +320,21 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
   // 监听防抖后的值变化，触发自动保存 (仅标签)
   useEffect(() => {
     if (isFirstLoad.current) {
-      console.log('[DEBUG] Skipping auto-save (isFirstLoad is true)')
       return
     }
     if (!note) {
-      console.log('[DEBUG] Skipping auto-save (note is null)')
       return
     }
     if (isReadOnly) {
-      console.log('[DEBUG] Skipping auto-save (isReadOnly is true)')
       return 
     }
-
-    console.log('[DEBUG] Debounced tags changed, saving:', debouncedTags)
-    saveMutation.mutate({
-      tags: debouncedTags
-    })
+    // 只有当 tags 真正改变时才保存
+    const existingTags = note?.tags?.map(t => t.name).sort().join(',') || ''
+    const newTags = debouncedTags?.slice().sort().join(',') || ''
+    if (existingTags === newTags) {
+      return
+    }
+    saveMutation.mutate({ tags: debouncedTags })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedTags])
 
@@ -333,7 +347,6 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
     // 只有当标题真正改变时才保存
     if (note.title !== debouncedTitle) {
-      console.log('[DEBUG] Debounced title changed (online), saving:', debouncedTitle)
       saveMutation.mutate({
         title: debouncedTitle
       })
