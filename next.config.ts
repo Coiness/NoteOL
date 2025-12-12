@@ -23,6 +23,17 @@ export default withBundleAnalyzer(withPWA({
     cleanupOutdatedCaches: true,
     runtimeCaching: [
       {
+        urlPattern: /^https?.*\/api\/.*/,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'noteol-api-cache',
+          expiration: {
+            maxEntries: 100,
+            maxAgeSeconds: 5 * 60, // 5分钟
+          },
+        },
+      },
+      {
         urlPattern: /^https?.*/,
         handler: 'NetworkFirst',
         options: {

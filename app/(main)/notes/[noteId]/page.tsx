@@ -4,6 +4,8 @@ interface PageProps {
   params: Promise<{ noteId: string }>
 }
 
+export const dynamic = 'force-dynamic'
+
 export default async function NotePage(props: PageProps) {
   const params = await props.params
   return (
