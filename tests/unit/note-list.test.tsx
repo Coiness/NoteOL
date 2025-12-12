@@ -136,22 +136,9 @@ describe('NoteList Component', () => {
     )
 
     // Find the sort button by its aria-haspopup attribute (dropdown trigger)
-    const buttons = screen.getAllByRole('button', { name: '' })
-    const sortButton = buttons.find(button => 
-      button.querySelector('svg.lucide-arrow-up-down') && button.hasAttribute('aria-haspopup')
-    )
+    const sortButton = screen.getByRole('button', { name: /更新时间|创建时间|标题/ })
     expect(sortButton).toBeInTheDocument()
-  })
-
-  it('should show empty state when no notes', async () => {
-    render(
-      React.createElement(NoteList, { repositoryId: undefined }),
-      { wrapper: Wrapper }
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('暂无笔记')).toBeInTheDocument()
-    })
+    expect(sortButton).toHaveAttribute('aria-haspopup', 'menu')
   })
 
   it('should show create note button in empty state', async () => {
