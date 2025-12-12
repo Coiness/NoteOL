@@ -175,14 +175,14 @@ class OfflineManager {
 
   // 更新离线笔记
   async updateOfflineNote(noteId: string, updates: Partial<OfflineNote>): Promise<void> {
-    console.log('[DEBUG] updateOfflineNote called:', noteId, updates)
+    console.log('[DEBUG] updateOfflineNote called:', noteId, 'updates:', updates)
     if (!this.db) await this.initDB()
 
     const note = await this.getOfflineNote(noteId)
     if (note) {
-      console.log('[DEBUG] Found note to update:', note.title)
+      console.log('[DEBUG] Found note to update:', note.title, 'current tags:', note.tags)
       const updatedNote = { ...note, ...updates, updatedAt: new Date() }
-      console.log('[DEBUG] Updated note:', updatedNote.title, updatedNote.tags)
+      console.log('[DEBUG] Updated note will be:', updatedNote.title, 'new tags:', updatedNote.tags)
       await this.saveOfflineNote(updatedNote)
       console.log('[DEBUG] Note saved successfully')
     } else {
@@ -342,21 +342,61 @@ export function useOffline() {
 
   // 触发全局刷新
   const triggerGlobalRefresh = useCallback(() => {
-    console.log('[DEBUG] Triggering global refresh, callback exists:', !!globalRefreshCallback)
+    console.log('[DEBUG] triggerGlobalRefresh called, callback exists:', !!globalRefreshCallback)
     if (globalRefreshCallback) {
+      console.log('[DEBUG] Executing global refresh callback')
       globalRefreshCallback()
+      console.log('[DEBUG] Global refresh callback executed')
+    } else {
+      console.log('[DEBUG] No global refresh callback set')
     }
   }, [])
+
+  // 使用 useCallback 包装方法以保持引用稳定
+  const createOfflineNote = useCallback(async (data: {
+    title: string
+    content?: string
+    tags?: string[]
+    repositoryId?: string
+  }) => {
+    if (!isClient) throw new Error('Not available on server')
+    return offlineManager.createOfflineNote(data)
+  }, [isClient])
+
+  const updateOfflineNote = useCallback(async (noteId: string, updates: Partial<OfflineNote>) => {
+    if (!isClient) return
+    return offlineManager.updateOfflineNote(noteId, updates)
+  }, [isClient])
+
+  const syncPendingOperations = useCallback(async () => {
+    if (!isClient) return
+    return offlineManager.syncPendingOperations()
+  }, [isClient])
+
+  const getOfflineNotes = useCallback(async () => {
+    if (!isClient) return []
+    return offlineManager.getOfflineNotes()
+  }, [isClient])
+
+  const getOfflineNote = useCallback(async (noteId: string) => {
+    if (!isClient) return null
+    return offlineManager.getOfflineNote(noteId)
+  }, [isClient])
+
+  const deleteOfflineNote = useCallback(async (noteId: string) => {
+    if (!isClient) return
+    return offlineManager.deleteOfflineNote(noteId)
+  }, [isClient])
 
   return {
     isOnline,
     pendingNotesCount,
-    createOfflineNote: isClient ? offlineManager.createOfflineNote.bind(offlineManager) : async () => { throw new Error('Not available on server') },
-    updateOfflineNote: isClient ? offlineManager.updateOfflineNote.bind(offlineManager) : async () => {},
-    syncPendingOperations: isClient ? offlineManager.syncPendingOperations.bind(offlineManager) : async () => {},
-    getOfflineNotes: isClient ? offlineManager.getOfflineNotes.bind(offlineManager) : async () => [],
-    getOfflineNote: isClient ? offlineManager.getOfflineNote.bind(offlineManager) : async () => null,
-    deleteOfflineNote: isClient ? offlineManager.deleteOfflineNote.bind(offlineManager) : async () => {},
+    createOfflineNote,
+    updateOfflineNote,
+    syncPendingOperations,
+    getOfflineNotes,
+    getOfflineNote,
+    deleteOfflineNote,
     setGlobalRefreshCallback,
     triggerGlobalRefresh,
   }

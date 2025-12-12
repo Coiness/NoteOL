@@ -61,12 +61,18 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
 
   // 刷新离线笔记的函数 - 使用 useRef 确保稳定
   refreshOfflineNotesRef.current = useCallback(async () => {
+    console.log('[DEBUG] Refreshing offline notes - START')
     try {
       const notes = await getOfflineNotes()
+      console.log('[DEBUG] Got offline notes:', notes.length, 'notes')
       const filteredNotes = notes.filter(note =>
         !repositoryId || note.repositoryId === repositoryId
       )
+      console.log('[DEBUG] Filtered offline notes:', filteredNotes.length, 'notes')
+      console.log('[DEBUG] Setting offline notes state with:', filteredNotes.map(n => ({ id: n.id, title: n.title, tags: n.tags })))
       setOfflineNotes(filteredNotes)
+      console.log('[DEBUG] State updated, offlineNotes should trigger re-render')
+      console.log('[DEBUG] Refreshing offline notes - END')
     } catch (error) {
       console.error("Failed to refresh offline notes:", error)
     }
@@ -74,7 +80,10 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
 
   // 设置全局刷新回调 - 只在组件挂载时设置一次
   useEffect(() => {
-    const stableCallback = () => refreshOfflineNotesRef.current?.()
+    const stableCallback = () => {
+      console.log('[DEBUG] Global refresh callback triggered')
+      refreshOfflineNotesRef.current?.()
+    }
     setGlobalRefreshCallback(stableCallback)
 
     // 组件卸载时清理
@@ -86,13 +95,14 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
   // 加载离线笔记
   useEffect(() => {
     refreshOfflineNotesRef.current?.()
-    // 监听离线笔记变化
-    const interval = setInterval(() => refreshOfflineNotesRef.current?.(), 2000)
-    return () => clearInterval(interval)
+    // 移除轮询，改为依赖事件触发刷新，避免控制台刷屏
+    // const interval = setInterval(() => refreshOfflineNotesRef.current?.(), 2000)
+    // return () => clearInterval(interval)
   }, []) // 移除依赖，避免循环
 
   // 合并在线和离线笔记，并按当前排序规则排序 - 使用 useMemo 优化
   const allNotes = useMemo(() => {
+    console.log('[DEBUG] allNotes useMemo triggered, online notes:', (data?.pages.flatMap((page: any) => page.notes) || []).length, 'offline notes:', offlineNotes.length)
     const onlineNotes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
 
     const offlineNotesConverted = offlineNotes.map(note => ({
@@ -141,6 +151,7 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
       return (aValue - bValue) * multiplier
     })
 
+    console.log('[DEBUG] allNotes result:', result.map(n => ({ id: n.id, title: n.title, tags: n.tags, isOffline: (n as any).isOffline })))
     return result
   }, [data, offlineNotes, sortOrder])
 

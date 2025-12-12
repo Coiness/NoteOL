@@ -39,6 +39,8 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
   // 记录是否是首次加载，避免首次加载触发自动保存
   const isFirstLoad = useRef(true)
+  // 记录当前已加载数据的笔记ID，防止离线模式下重复用旧数据覆盖新数据
+  const loadedNoteId = useRef<string | null>(null)
 
   // 离线功能
   const { getOfflineNote, updateOfflineNote, triggerGlobalRefresh } = useOffline()
@@ -182,28 +184,57 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
   // 初始化本地状态 (从 API 获取的数据)
   useEffect(() => {
-    if (note && isSynced) {
-      // 只有当 Y.js 同步完成且标题为空时，才使用 API 数据初始化
+    if (!note) return
+
+    // 检查是否切换了笔记
+    const isNewNote = loadedNoteId.current !== noteId
+    
+    if (isNewNote) {
+      console.log('[DEBUG] Initializing state for new note:', noteId)
+      loadedNoteId.current = noteId
+      
+      // 首次加载：总是从 DB 同步
+      const newTags = note.tags?.map(t => t.name) || []
+      setTags(newTags)
+    } else {
+      // 同一个笔记的后续更新
+      if (isOfflineNote) {
+        // 【关键修复】离线模式下，本地状态是 Source of Truth。
+        // 防止 saveMutation -> invalidate -> useQuery -> useEffect 流程导致的
+        // "数据库旧数据覆盖本地新数据" 的 Bug。
+        // 所以这里什么都不做，保持本地 tags 不变。
+        console.log('[DEBUG] Offline note update received, ignoring tags sync to prevent overwrite')
+      } else {
+        // 在线模式：可能由协作者修改，需要同步（这里可以进一步优化冲突逻辑，但暂且保持原样）
+        const newTags = note.tags?.map(t => t.name) || []
+        setTags(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(newTags)) {
+            console.log('[DEBUG] Syncing tags from server:', newTags)
+            return newTags
+          }
+          return prev
+        })
+      }
+    }
+
+    // 2. 初始化标题 (需要等待 Y.js 同步，以 Y.js 为准，但如果是离线笔记且 Y.js 为空，则使用 DB 标题)
+    if (isSynced || isOfflineNote) {
       const yTitle = yDoc.getText('title')
       if (yTitle.length === 0 && note.title) {
           yDoc.transact(() => {
               yTitle.insert(0, note.title)
           })
       }
-
-      const newTags = note.tags?.map(t => t.name) || []
-      setTags(prev => {
-        if (JSON.stringify(prev) !== JSON.stringify(newTags)) {
-          return newTags
-        }
-        return prev
-      })
-
-      setTimeout(() => {
-        isFirstLoad.current = false
-      }, 100)
     }
-  }, [note, yDoc, isSynced])
+
+    // 3. 标记首次加载完成 (移出 isSynced 判断，只要 note 加载了就允许 Tag 自动保存)
+    if (isFirstLoad.current && note) {
+      setTimeout(() => {
+        console.log('[DEBUG] Enabling auto-save (isFirstLoad -> false)')
+        isFirstLoad.current = false
+      }, 1000)
+    }
+  }, [note, yDoc, isSynced, isOfflineNote, noteId])
 
   // 处理标题变更
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -212,6 +243,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
       const yTitle = yDoc.getText('title')
       if (yTitle.toString() !== newTitle) {
+          console.log('[DEBUG] Title changed locally:', newTitle)
           yDoc.transact(() => {
               yTitle.delete(0, yTitle.length)
               yTitle.insert(0, newTitle)
@@ -234,6 +266,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
   // 保存笔记 Mutation (支持离线保存)
   const saveMutation = useMutation({
     mutationFn: async (data: { tags: string[] }) => {
+      console.log('[DEBUG] saveMutation called with:', data)
       if (isOfflineNote) {
         // 离线笔记：更新 IndexedDB 中的笔记
         await updateOfflineNote(noteId!, { tags: data.tags })
@@ -251,8 +284,12 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
     },
     onSuccess: () => {
       if (isOfflineNote) {
-        // 离线笔记：触发列表刷新
+        console.log('[DEBUG] Tags save successful for offline note')
+        // 离线笔记：触发列表刷新 (解决左侧列表不更新问题)
         triggerGlobalRefresh()
+        // 同时也需要刷新当前笔记的查询缓存，确保本地状态与 DB 保持一致
+        // 注意：由于上面的 useEffect 修复，这里刷新不会导致 Tag 闪烁/消失
+        queryClient.invalidateQueries({ queryKey: ["note", noteId] })
       } else {
         // 在线笔记：通过 React Query 刷新
         queryClient.invalidateQueries({ queryKey: ["note", noteId] })
@@ -266,10 +303,20 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
   // 监听防抖后的值变化，触发自动保存 (仅标签)
   useEffect(() => {
-    if (isFirstLoad.current) return
-    if (!note) return
-    if (isReadOnly) return // 只读模式下不自动保存
+    if (isFirstLoad.current) {
+      console.log('[DEBUG] Skipping auto-save (isFirstLoad is true)')
+      return
+    }
+    if (!note) {
+      console.log('[DEBUG] Skipping auto-save (note is null)')
+      return
+    }
+    if (isReadOnly) {
+      console.log('[DEBUG] Skipping auto-save (isReadOnly is true)')
+      return 
+    }
 
+    console.log('[DEBUG] Debounced tags changed, saving:', debouncedTags)
     saveMutation.mutate({
       tags: debouncedTags
     })
