@@ -1,0 +1,189 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// 1. 用户与认证 (User & Authentication)
+// ============================================================================
+
+// 系统核心用户模型
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // 密码字段，OAuth登陆时可能为空
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // NextAuth 关联
+  accounts      Account[]
+  sessions      Session[]
+  
+  // 业务关联
+  repositories  Repository[]       // 用户创建的知识库
+  notes         Note[]             // 用户作为 Owner 的笔记
+  tags          Tag[]              // 用户创建的标签
+  collaborations NoteCollaborator[] // 用户参与协作的记录
+}
+
+// NextAuth: 第三方认证登录
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// NextAuth: 用户会话
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// NextAuth: 验证令牌
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================================
+// 2. 核心内容 (Core Content)
+// ============================================================================
+
+// 笔记实体：存储笔记的核心内容
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String?  @db.Text
+  yjsState  Bytes?   // Y.js 二进制状态，用于实时协作同步
+  wordCount Int      @default(0) // 字数统计
+  userId    String   // 所有者ID
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteRepositories NoteRepository[] // 笔记所属知识库，多对多
+  tags             Tag[]            @relation("NoteTags") // 笔记的标签
+  collaborators    NoteCollaborator[] // 笔记的协作者
+  shareLinks       ShareLink[]      // 笔记的分享链接
+}
+
+// ============================================================================
+// 3. 组织架构(Organization)
+// ============================================================================
+
+// 知识库：用于归档和组织笔记的文件夹
+model Repository {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  isDefault   Boolean  @default(false) // 是否为默认知识库(Inbox)
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteRepositories NoteRepository[]
+}
+
+// 关联表：笔记 <-> 知识库 多对多关系
+model NoteRepository {
+  noteId       String
+  repositoryId String
+  userId       String   // 冗余字段，用于快速权限验证
+  addedAt      DateTime @default(now())
+
+  note       Note       @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, repositoryId])
+  @@index([userId])
+}
+
+// ============================================================================
+// 4. 元数据(Metadata)
+// ============================================================================
+
+// 标签，用于灵活分类笔记
+model Tag {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  color     String?
+  createdAt DateTime @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes Note[] @relation("NoteTags")
+
+  @@unique([name, userId]) // 同一个用户不能有重名标签
+}
+
+// ============================================================================
+// 5. 协作与分享(Collaboration & Sharing)
+// ============================================================================
+
+// 权限角色枚举
+enum Role {
+  OWNER   // 所有者:拥有所有权限
+  ADMIN   // 管理者：可以管理协作者，分享链接，编辑内容
+  EDITOR  // 编辑者：可以编辑内容
+  VIEWER  // 观察者：仅可读
+}
+
+// 协作者关联表：记录用户对特定笔记的权限
+model NoteCollaborator {
+  id        String   @id @default(cuid())
+  noteId    String
+  userId    String
+  role      Role     @default(VIEWER)
+  createdAt DateTime @default(now())
+
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, userId]) // 一个用户对一个笔记只能拥有一个角色
+  @@index([userId])
+}
+
+// 分享链接：用于生成外部访问链接
+model ShareLink {
+  id        String   @id @default(cuid())
+  noteId    String
+  token     String   @unique // 唯一的分享 Token
+  role      Role     @default(VIEWER) // 通过此链接获得的权限
+  createdAt DateTime @default(now())
+  expiresAt DateTime? // 过期时间
+
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId])
+}
