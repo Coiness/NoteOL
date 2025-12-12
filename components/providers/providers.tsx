@@ -3,7 +3,7 @@
 import { SessionProvider, signOut } from "next-auth/react"
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query"
 import { ThemeProvider } from "next-themes"
-import { ReactNode, useState } from "react"
+import { ReactNode, useState, useEffect } from "react"
 import { toast } from "sonner"
 
 interface ProvidersProps {
@@ -38,6 +38,19 @@ export function Providers({ children }: ProvidersProps) {
         }
     })
   }))
+
+  // Register Service Worker for PWA
+  useEffect(() => {
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('Service Worker registered successfully:', registration);
+        })
+        .catch((error) => {
+          console.log('Service Worker registration failed:', error);
+        });
+    }
+  }, []);
 
   return (
     <SessionProvider>
