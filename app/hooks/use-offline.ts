@@ -9,7 +9,7 @@ import { useDebounce } from '@/app/hooks/use-debounce'
 
 // IndexedDB 数据库名称和版本
 const DB_NAME = 'noteol_offline'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 class OfflineManager {
   private db: IDBDatabase | null = null
@@ -53,6 +53,12 @@ class OfflineManager {
           const operationsStore = db.createObjectStore('offline_operations', { keyPath: 'id' })
           operationsStore.createIndex('status', 'status', { unique: false })
           operationsStore.createIndex('type', 'type', { unique: false })
+        }
+
+        // 创建离线知识库存储
+        if (!db.objectStoreNames.contains('offline_repositories')) {
+          const reposStore = db.createObjectStore('offline_repositories', { keyPath: 'id' })
+          reposStore.createIndex('userId', 'userId', { unique: false })
         }
       }
     })
@@ -239,6 +245,85 @@ class OfflineManager {
     return results
   }
 
+  // ============ 知识库数据管理方法 ============
+
+  // 缓存知识库列表到 IndexedDB
+  async cacheRepositories(repositories: any[]): Promise<void> {
+    if (!this.db) await this.initDB()
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['offline_repositories'], 'readwrite')
+      const store = transaction.objectStore('offline_repositories')
+
+      // 清空旧数据
+      const clearRequest = store.clear()
+      clearRequest.onsuccess = () => {
+        // 添加新数据
+        let completed = 0
+        const total = repositories.length
+
+        if (total === 0) {
+          resolve()
+          return
+        }
+
+        repositories.forEach(repo => {
+          const request = store.put(repo)
+          request.onsuccess = () => {
+            completed++
+            if (completed === total) {
+              resolve()
+            }
+          }
+          request.onerror = () => reject(request.error)
+        })
+      }
+      clearRequest.onerror = () => reject(clearRequest.error)
+    })
+  }
+
+  // 获取缓存的知识库列表
+  async getCachedRepositories(): Promise<any[]> {
+    if (!this.db) await this.initDB()
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['offline_repositories'], 'readonly')
+      const store = transaction.objectStore('offline_repositories')
+      const request = store.getAll()
+
+      request.onsuccess = () => resolve(request.result || [])
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  // 缓存单个知识库
+  async cacheRepository(repository: any): Promise<void> {
+    if (!this.db) await this.initDB()
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['offline_repositories'], 'readwrite')
+      const store = transaction.objectStore('offline_repositories')
+      const request = store.put(repository)
+
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  // 获取缓存的单个知识库
+  async getCachedRepository(repoId: string): Promise<any | null> {
+    if (!this.db) await this.initDB()
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['offline_repositories'], 'readonly')
+      const store = transaction.objectStore('offline_repositories')
+      const request = store.get(repoId)
+
+      request.onsuccess = () => resolve(request.result || null)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
   // 同步所有待处理的离线操作
   async syncPendingOperations(): Promise<void> {
     if (!this.isOnline) return
@@ -378,6 +463,26 @@ export function useOffline() {
     return offlineManager.deleteOfflineNote(noteId)
   }, [isClient])
 
+  const cacheRepositories = useCallback(async (repositories: any[]) => {
+    if (!isClient) return
+    return offlineManager.cacheRepositories(repositories)
+  }, [isClient])
+
+  const getCachedRepositories = useCallback(async () => {
+    if (!isClient) return []
+    return offlineManager.getCachedRepositories()
+  }, [isClient])
+
+  const cacheRepository = useCallback(async (repository: any) => {
+    if (!isClient) return
+    return offlineManager.cacheRepository(repository)
+  }, [isClient])
+
+  const getCachedRepository = useCallback(async (repoId: string) => {
+    if (!isClient) return null
+    return offlineManager.getCachedRepository(repoId)
+  }, [isClient])
+
   return {
     isOnline,
     pendingNotesCount,
@@ -389,6 +494,11 @@ export function useOffline() {
     deleteOfflineNote,
     setGlobalRefreshCallback,
     triggerGlobalRefresh,
+    // 新增的知识库缓存方法
+    cacheRepositories,
+    getCachedRepositories,
+    cacheRepository,
+    getCachedRepository,
   }
 }
 
