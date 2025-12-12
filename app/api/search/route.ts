@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
               { title: { contains: query } }
             ]
           },
-          take: 5,
+          take: 20,
           include: { tags: true },
           orderBy: { updatedAt: 'desc' }
         }),
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
               { tags: { some: { name: { contains: query } } } }
             ]
           },
-          take: 5,
+          take: 20,
           include: { tags: true },
           orderBy: { updatedAt: 'desc' }
         }),
@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
               { content: { contains: query } }
             ]
           },
-          take: 5,
+          take: 20,
           include: { tags: true },
           orderBy: { updatedAt: 'desc' }
         })
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
             { title: { contains: query } }
           ]
         },
-        take: 10,
+        take: 20,
         include: { tags: true },
         orderBy: { updatedAt: 'desc' }
       })
@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
             { content: { contains: query } }
           ]
         },
-        take: 10,
+        take: 20,
         include: { tags: true },
         orderBy: { updatedAt: 'desc' }
       })
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
             { tags: { some: { name: { contains: query } } } }
           ]
         },
-        take: 10,
+        take: 20,
         include: { tags: true },
         orderBy: { updatedAt: 'desc' }
       })
@@ -152,7 +152,7 @@ export async function GET(req: NextRequest) {
             }
           ]
         },
-        take: 10,
+        take: 20,
         include: { tags: true, noteRepositories: { include: { repository: true } } },
         orderBy: { updatedAt: 'desc' }
       })
@@ -164,12 +164,12 @@ export async function GET(req: NextRequest) {
         // 简单的查找，忽略大小写
         const index = plainText.toLowerCase().indexOf(query.toLowerCase())
         
-        let snippet = plainText.slice(0, 50) // 默认取前50个字符
+        let snippet = plainText.slice(0, 100) // 默认取前100个字符
         
         if (index !== -1) {
             // 截取关键词前后的一段文本
-            const start = Math.max(0, index - 15)
-            const end = Math.min(plainText.length, index + query.length + 35)
+            const start = Math.max(0, index - 30)
+            const end = Math.min(plainText.length, index + query.length + 70)
             snippet = (start > 0 ? "..." : "") + plainText.slice(start, end) + (end < plainText.length ? "..." : "")
         }
         

@@ -40,7 +40,7 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
         return { data: offlineNote, isOffline: true }
       }
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       // 只刷新与当前 repository 相关的 notes 查询，避免全量刷新
       if (repositoryId) {
         queryClient.invalidateQueries({ queryKey: ["notes", repositoryId] })
@@ -48,13 +48,45 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
         queryClient.invalidateQueries({ queryKey: ["notes"] })
       }
 
+      // 获取实际要跳转的 repositoryId
+      let targetRepositoryId = repositoryId
+      if (!targetRepositoryId) {
+        // 如果没有指定 repositoryId，需要获取默认知识库的ID
+        try {
+          const res = await fetch("/api/repositories")
+          if (res.ok) {
+            const repoData = await res.json()
+            const defaultRepo = repoData.data?.find((repo: any) => repo.isDefault)
+            if (defaultRepo) {
+              targetRepositoryId = defaultRepo.id
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch default repository:", error)
+        }
+      }
+
+      // 刷新相关查询
+      if (targetRepositoryId) {
+        queryClient.invalidateQueries({ queryKey: ["notes", targetRepositoryId] })
+      }
+      queryClient.invalidateQueries({ queryKey: ["notes"] })
+
       if (data.isOffline) {
         // 离线创建的笔记，使用本地ID
         toast.success("笔记已创建 (离线模式)")
-        router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
+        if (targetRepositoryId) {
+          router.push(`/repositories/${targetRepositoryId}?noteId=${data.data.id}`)
+        } else {
+          router.push(`/notes/${data.data.id}`)
+        }
       } else {
         // 在线创建的笔记，使用服务器ID
-        router.push(`/repositories/${repositoryId}?noteId=${data.data.id}`)
+        if (targetRepositoryId) {
+          router.push(`/repositories/${targetRepositoryId}?noteId=${data.data.id}`)
+        } else {
+          router.push(`/notes/${data.data.id}`)
+        }
       }
     },
     onError: (error) => {

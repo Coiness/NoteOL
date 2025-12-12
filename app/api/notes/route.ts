@@ -146,7 +146,6 @@ export async function POST(req: NextRequest) {
           isDefault: true,
         },
       })
-      
       if (!defaultRepo) {
         // 理论上注册时会创建，但为了健壮性，如果没有则创建一个
         const newDefaultRepo = await prisma.repository.create({
@@ -170,6 +169,15 @@ export async function POST(req: NextRequest) {
         }
     }
 
+    // 获取默认知识库ID（所有笔记都必须在默认知识库中）
+    const defaultRepo = await prisma.repository.findFirst({
+      where: {
+        userId: userId,
+        isDefault: true,
+      },
+    })
+    const defaultRepositoryId = defaultRepo?.id
+
     // 开启事务处理笔记创建和关联
     const note = await prisma.$transaction(async (tx) => {
       // 1. 创建笔记
@@ -182,13 +190,31 @@ export async function POST(req: NextRequest) {
       })
 
       // 2. 关联知识库
-      await tx.noteRepository.create({
-        data: {
-          noteId: newNote.id,
-          repositoryId: repositoryId!,
-          userId: userId,
-        },
-      })
+      const noteRepos = []
+
+      // 总是关联到默认知识库（如果存在）
+      if (defaultRepositoryId) {
+        const defaultNoteRepo = await tx.noteRepository.create({
+          data: {
+            noteId: newNote.id,
+            repositoryId: defaultRepositoryId,
+            userId: userId,
+          },
+        })
+        noteRepos.push(defaultNoteRepo)
+      }
+
+      // 如果指定了不同的知识库，也关联到该知识库
+      if (repositoryId && repositoryId !== defaultRepositoryId) {
+        const specifiedNoteRepo = await tx.noteRepository.create({
+          data: {
+            noteId: newNote.id,
+            repositoryId: repositoryId,
+            userId: userId,
+          },
+        })
+        noteRepos.push(specifiedNoteRepo)
+      }
 
       // 3. 处理标签 (如果有)
       if (body.tags && body.tags.length > 0) {
