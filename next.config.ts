@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
 export default withBundleAnalyzer(withPWA({
   dest: 'public',
   register: true,
-  disable: false,
+  disable: process.env.NODE_ENV === 'development', // 在开发环境中禁用 PWA
   fallbacks: {
     document: '/offline', // 确保有这个页面
   },
