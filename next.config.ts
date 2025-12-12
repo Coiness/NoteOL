@@ -1,51 +1,38 @@
 import type { NextConfig } from "next";
+import withPWA from '@ducanh2912/next-pwa';
 
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 })
 
 const nextConfig: NextConfig = {
-  turbopack: {},
-  
-  async headers() {
-    return [
-      {
-        source: '/sw.js',
-        headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/javascript; charset=utf-8',
-          },
-          {
-            key: 'Cache-Control',
-            value: 'no-cache, no-store, must-revalidate',
-          },
-          {
-            key: 'Service-Worker-Allowed',
-            value: '/', 
-          }
-        ],
-      },
-      {
-        source: '/manifest.json',
-        headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/json; charset=utf-8',
-          }
-        ]
-      }
-    ];
-  },
-  
-  async rewrites() {
-    return [
-      {
-        source: '/sw.js',
-        destination: '/sw.js',
-      },
-    ];
-  },
+  // 禁用 Turbopack，强制使用 Webpack
+  // turbopack: {}, // 移除这行
 };
 
-export default withBundleAnalyzer(nextConfig);
+export default withBundleAnalyzer(withPWA({
+  dest: 'public',
+  register: true,
+  disable: false,
+  fallbacks: {
+    document: '/offline', // 确保有这个页面
+  },
+  workboxOptions: {
+    skipWaiting: true,
+    clientsClaim: true,
+    cleanupOutdatedCaches: true,
+    runtimeCaching: [
+      {
+        urlPattern: /^https?.*/,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'noteol-dynamic-cache',
+          expiration: {
+            maxEntries: 200,
+            maxAgeSeconds: 24 * 60 * 60,
+          },
+        },
+      },
+    ],
+  },
+})(nextConfig));
