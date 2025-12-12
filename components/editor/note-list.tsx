@@ -42,6 +42,35 @@ export function NoteList({ repositoryId }: NoteListProps) {
   const [sortOrder, setSortOrder] = useState<"updated_desc" | "updated_asc" | "created_desc" | "created_asc" | "title_asc" | "title_desc">("updated_desc")
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   
+  // 获取当前排序的显示文本
+  const getCurrentSortLabel = () => {
+    switch (sortOrder) {
+      case "updated_desc": return "更新时间 (最新)"
+      case "updated_asc": return "更新时间 (最早)"
+      case "created_desc": return "创建时间 (最新)"
+      case "created_asc": return "创建时间 (最早)"
+      case "title_asc": return "标题 (A-Z)"
+      case "title_desc": return "标题 (Z-A)"
+      default: return "更新时间 (最新)"
+    }
+  }
+
+  const getCurrentSortIcon = () => {
+    switch (sortOrder) {
+      case "updated_desc":
+      case "updated_asc":
+        return <Clock className="h-4 w-4" />
+      case "created_desc":
+      case "created_asc":
+        return <Calendar className="h-4 w-4" />
+      case "title_asc":
+      case "title_desc":
+        return <Type className="h-4 w-4" />
+      default:
+        return <Clock className="h-4 w-4" />
+    }
+  }
+  
   // 使用 URL query 参数中的 noteId
   const currentNoteId = searchParams.get("noteId") 
 
@@ -107,7 +136,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
     return () => clearInterval(interval)
   }, [repositoryId, getOfflineNotes])
 
-  // 合并在线和离线笔记
+  // 合并在线和离线笔记，并按当前排序规则排序
   const allNotes = [...notes, ...offlineNotes.map(note => ({
     ...note,
     role: "OWNER" as const,
@@ -121,10 +150,35 @@ export function NoteList({ repositoryId }: NoteListProps) {
       createdAt: note.createdAt.toISOString() 
     })) // 将 string[] 转换为 Tag[]
   } as Note))].sort((a, b) => {
-    // 按更新时间倒序排序
-    const aTime = new Date(a.updatedAt).getTime()
-    const bTime = new Date(b.updatedAt).getTime()
-    return bTime - aTime
+    // 根据当前排序规则排序
+    const [sortField, sortDirection] = sortOrder.split("_")
+    const multiplier = sortDirection === "desc" ? -1 : 1
+    
+    let aValue: any, bValue: any
+    
+    switch (sortField) {
+      case "updated":
+        aValue = new Date(a.updatedAt).getTime()
+        bValue = new Date(b.updatedAt).getTime()
+        break
+      case "created":
+        aValue = new Date(a.createdAt || a.updatedAt).getTime()
+        bValue = new Date(b.createdAt || b.updatedAt).getTime()
+        break
+      case "title":
+        aValue = (a.title || "").toLowerCase()
+        bValue = (b.title || "").toLowerCase()
+        break
+      default:
+        aValue = new Date(a.updatedAt).getTime()
+        bValue = new Date(b.updatedAt).getTime()
+    }
+    
+    if (typeof aValue === "string") {
+      return aValue.localeCompare(bValue) * multiplier
+    }
+    
+    return (aValue - bValue) * multiplier
   })
   const observerTarget = useRef<HTMLDivElement>(null)
 
@@ -208,36 +262,56 @@ export function NoteList({ repositoryId }: NoteListProps) {
             <div className="flex items-center gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-                    <ArrowUpDown className="h-4 w-4" />
+                  <Button variant="ghost" size="sm" className="h-8 px-3 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                    {getCurrentSortIcon()}
+                    <span className="ml-2 text-xs">{getCurrentSortLabel()}</span>
+                    <ArrowUpDown className="ml-2 h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>排序方式</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setSortOrder("updated_desc")}>
+                  <DropdownMenuItem 
+                    onClick={() => setSortOrder("updated_desc")}
+                    className={sortOrder === "updated_desc" ? "bg-accent" : ""}
+                  >
                     <Clock className="mr-2 h-4 w-4" />
                     更新时间 (最新)
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSortOrder("updated_asc")}>
+                  <DropdownMenuItem 
+                    onClick={() => setSortOrder("updated_asc")}
+                    className={sortOrder === "updated_asc" ? "bg-accent" : ""}
+                  >
                     <Clock className="mr-2 h-4 w-4" />
                     更新时间 (最早)
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setSortOrder("created_desc")}>
+                  <DropdownMenuItem 
+                    onClick={() => setSortOrder("created_desc")}
+                    className={sortOrder === "created_desc" ? "bg-accent" : ""}
+                  >
                     <Calendar className="mr-2 h-4 w-4" />
                     创建时间 (最新)
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSortOrder("created_asc")}>
+                  <DropdownMenuItem 
+                    onClick={() => setSortOrder("created_asc")}
+                    className={sortOrder === "created_asc" ? "bg-accent" : ""}
+                  >
                     <Calendar className="mr-2 h-4 w-4" />
                     创建时间 (最早)
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setSortOrder("title_asc")}>
+                  <DropdownMenuItem 
+                    onClick={() => setSortOrder("title_asc")}
+                    className={sortOrder === "title_asc" ? "bg-accent" : ""}
+                  >
                     <Type className="mr-2 h-4 w-4" />
                     标题 (A-Z)
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSortOrder("title_desc")}>
+                  <DropdownMenuItem 
+                    onClick={() => setSortOrder("title_desc")}
+                    className={sortOrder === "title_desc" ? "bg-accent" : ""}
+                  >
                     <Type className="mr-2 h-4 w-4" />
                     标题 (Z-A)
                   </DropdownMenuItem>
