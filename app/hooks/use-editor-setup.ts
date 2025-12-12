@@ -36,6 +36,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
   // 自动保存防抖
   const debouncedTags = useDebounce(tags, 1000)
+  const debouncedTitle = useDebounce(title, 1000)
 
   // 记录是否是首次加载，避免首次加载触发自动保存
   const isFirstLoad = useRef(true)
@@ -265,11 +266,11 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
   // 保存笔记 Mutation (支持离线保存)
   const saveMutation = useMutation({
-    mutationFn: async (data: { tags: string[] }) => {
+    mutationFn: async (data: { title?: string; tags?: string[] }) => {
       console.log('[DEBUG] saveMutation called with:', data)
       if (isOfflineNote) {
         // 离线笔记：更新 IndexedDB 中的笔记
-        await updateOfflineNote(noteId!, { tags: data.tags })
+        await updateOfflineNote(noteId!, data)
         return { success: true }
       } else {
         // 在线笔记：调用服务器API
@@ -322,6 +323,23 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedTags])
+
+  // 监听防抖后的标题变化，触发自动保存 (仅在线笔记)
+  useEffect(() => {
+    if (isFirstLoad.current) return
+    if (!note) return
+    if (isReadOnly) return
+    if (isOfflineNote) return // 离线笔记已在 handleTitleChange 中处理
+
+    // 只有当标题真正改变时才保存
+    if (note.title !== debouncedTitle) {
+      console.log('[DEBUG] Debounced title changed (online), saving:', debouncedTitle)
+      saveMutation.mutate({
+        title: debouncedTitle
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedTitle])
 
   // 删除/移除笔记 Mutation
   const deleteMutation = useMutation({
