@@ -91,7 +91,7 @@ export function GlobalSearch() {
             value={query}
             onValueChange={setQuery}
         />
-        <CommandList>
+        <CommandList className="max-h-[400px] overflow-y-auto">
           <CommandEmpty>
             {loading ? (
                 <div className="flex items-center justify-center py-6">
@@ -147,6 +147,29 @@ export function GlobalSearch() {
             </>
           )}
 
+          {data.content.length > 0 && (
+            <>
+                <CommandSeparator />
+                <CommandGroup heading="内容匹配">
+                {data.content.map((note) => (
+                    <CommandItem
+                    key={`content-${note.id}`}
+                    value={`content-${note.title}-${note.id}`}
+                    onSelect={() => handleSelect(note.id)}
+                    >
+                    <AlignLeft className="mr-2 h-4 w-4" />
+                    <div className="flex flex-col">
+                        <span>{note.title}</span>
+                        <span className="text-xs text-muted-foreground line-clamp-2">
+                            {note.content}
+                        </span>
+                    </div>
+                    </CommandItem>
+                ))}
+                </CommandGroup>
+            </>
+          )}
+
           {data.repositories.length > 0 && (
             <>
                 <CommandSeparator />
@@ -169,7 +192,6 @@ export function GlobalSearch() {
                 </CommandGroup>
             </>
           )}
-
         </CommandList>
       </CommandDialog>
     </>
