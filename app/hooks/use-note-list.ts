@@ -61,18 +61,12 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
 
   // 刷新离线笔记的函数 - 使用 useRef 确保稳定
   refreshOfflineNotesRef.current = useCallback(async () => {
-    console.log('[DEBUG] Refreshing offline notes - START')
     try {
       const notes = await getOfflineNotes()
-      console.log('[DEBUG] Got offline notes:', notes.length, 'notes')
       const filteredNotes = notes.filter(note =>
         !repositoryId || note.repositoryId === repositoryId
       )
-      console.log('[DEBUG] Filtered offline notes:', filteredNotes.length, 'notes')
-      console.log('[DEBUG] Setting offline notes state with:', filteredNotes.map(n => ({ id: n.id, title: n.title, tags: n.tags })))
       setOfflineNotes(filteredNotes)
-      console.log('[DEBUG] State updated, offlineNotes should trigger re-render')
-      console.log('[DEBUG] Refreshing offline notes - END')
     } catch (error) {
       console.error("Failed to refresh offline notes:", error)
     }
@@ -81,7 +75,6 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
   // 设置全局刷新回调 - 只在组件挂载时设置一次
   useEffect(() => {
     const stableCallback = () => {
-      console.log('[DEBUG] Global refresh callback triggered')
       refreshOfflineNotesRef.current?.()
     }
     setGlobalRefreshCallback(stableCallback)
@@ -102,7 +95,6 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
 
   // 合并在线和离线笔记，并按当前排序规则排序 - 使用 useMemo 优化
   const allNotes = useMemo(() => {
-    console.log('[DEBUG] allNotes useMemo triggered, online notes:', (data?.pages.flatMap((page: any) => page.notes) || []).length, 'offline notes:', offlineNotes.length)
     const onlineNotes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
 
     const offlineNotesConverted = offlineNotes.map(note => ({
@@ -151,7 +143,6 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
       return (aValue - bValue) * multiplier
     })
 
-    console.log('[DEBUG] allNotes result:', result.map(n => ({ id: n.id, title: n.title, tags: n.tags, isOffline: (n as any).isOffline })))
     return result
   }, [data, offlineNotes, sortOrder])
 

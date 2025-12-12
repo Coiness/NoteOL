@@ -86,7 +86,7 @@ export function TagInput({ value = [], onChange, placeholder = "添加标签..."
             {placeholder}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0" align="start">
+        <PopoverContent className="w-200px p-0" align="start">
           <Command>
             <CommandInput 
                 placeholder={disabled?"仅可读":"搜索或创建标签..."}

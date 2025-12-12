@@ -23,6 +23,5 @@ if (process.env.NODE_ENV !== 'production') {
   // 监听并打印查询日志
   // @ts-ignore
   prisma.$on('query', (e: any) => {
-    console.log(`\x1b[36m[Prisma Query] ${e.duration}ms\x1b[0m ${e.query}`)
   })
 }

@@ -121,7 +121,7 @@ export function GeneralSettings({
               value={selectedRepoId}
               onValueChange={setSelectedRepoId}
             >
-              <SelectTrigger className="h-8 text-xs w-[200px]">
+              <SelectTrigger className="h-8 text-xs w-200px">
                 <SelectValue placeholder="添加到知识库..." />
               </SelectTrigger>
               <SelectContent>

@@ -78,7 +78,7 @@ export function RepositoryList() {
 
   if (isLoading) {
     return (
-      <div className="flex h-[200px] items-center justify-center">
+      <div className="flex h-200px items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )

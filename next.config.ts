@@ -18,6 +18,7 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 
 const nextConfig: NextConfig = {
   /* config options here */
+  output: "standalone",
   turbopack: {},
 };
 

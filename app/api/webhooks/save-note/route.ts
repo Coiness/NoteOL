@@ -39,10 +39,19 @@ export async function POST(req: Request) {
       updateData.title = title
     }
 
-    await prisma.note.update({
-      where: { id: noteId },
-      data: updateData,
-    })
+    // Optional deduplication: only update when yjsState actually changed
+    const existing = await prisma.note.findUnique({ where: { id: noteId }, select: { yjsState: true } })
+    const incomingState = Buffer.from(yjsState, 'base64')
+    const existingStateBuffer = existing && existing.yjsState ? Buffer.from(existing.yjsState as Buffer) : null
+    const shouldUpdate = !existingStateBuffer || !existingStateBuffer.equals(incomingState)
+
+    if (shouldUpdate) {
+      await prisma.note.update({
+        where: { id: noteId },
+        data: updateData,
+      })
+    } else {
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
