@@ -170,7 +170,7 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-500px">
         <DialogHeader>
           <DialogTitle>笔记设置</DialogTitle>
           <DialogDescription>
@@ -211,7 +211,7 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
                   <Trash2 className="mr-2 h-4 w-4" />
                   永久删除笔记
                 </Button>
-                <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                <p className="text-10px text-muted-foreground mt-2 text-center">
                   这将从所有知识库中彻底删除此笔记
                 </p>
               </div>

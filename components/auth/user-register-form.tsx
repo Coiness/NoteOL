@@ -169,7 +169,7 @@ export function UserRegisterForm({ className, ...props }: UserRegisterFormProps)
                 variant="outline" 
                 disabled={isLoading || isSendingCode || countdown > 0}
                 onClick={onSendCode}
-                className="w-[120px]"
+                className="w-120px"
               >
                 {isSendingCode ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
