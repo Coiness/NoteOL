@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { Note } from "@/types"
 import { useOffline } from "@/app/hooks/use-offline"
@@ -54,30 +54,47 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
   const [offlineNotes, setOfflineNotes] = useState<OfflineNote[]>([])
 
   // 离线功能
-  const { getOfflineNotes } = useOffline()
+  const { getOfflineNotes, setGlobalRefreshCallback } = useOffline()
+
+  // 使用 useRef 存储稳定的刷新函数，避免依赖变化导致的循环
+  const refreshOfflineNotesRef = useRef<() => Promise<void>>(async () => {})
+
+  // 刷新离线笔记的函数 - 使用 useRef 确保稳定
+  refreshOfflineNotesRef.current = useCallback(async () => {
+    try {
+      const notes = await getOfflineNotes()
+      const filteredNotes = notes.filter(note =>
+        !repositoryId || note.repositoryId === repositoryId
+      )
+      setOfflineNotes(filteredNotes)
+    } catch (error) {
+      console.error("Failed to refresh offline notes:", error)
+    }
+  }, [repositoryId, getOfflineNotes])
+
+  // 设置全局刷新回调 - 只在组件挂载时设置一次
+  useEffect(() => {
+    const stableCallback = () => refreshOfflineNotesRef.current?.()
+    setGlobalRefreshCallback(stableCallback)
+
+    // 组件卸载时清理
+    return () => {
+      setGlobalRefreshCallback(() => {})
+    }
+  }, []) // 空依赖数组，只在挂载时执行一次
 
   // 加载离线笔记
   useEffect(() => {
-    const loadOfflineNotes = async () => {
-      try {
-        const notes = await getOfflineNotes()
-        setOfflineNotes(notes.filter(note =>
-          !repositoryId || note.repositoryId === repositoryId
-        ))
-      } catch (error) {
-        console.error("Failed to load offline notes:", error)
-      }
-    }
-    loadOfflineNotes()
-
+    refreshOfflineNotesRef.current?.()
     // 监听离线笔记变化
-    const interval = setInterval(loadOfflineNotes, 2000)
+    const interval = setInterval(() => refreshOfflineNotesRef.current?.(), 2000)
     return () => clearInterval(interval)
-  }, [repositoryId, getOfflineNotes])
+  }, []) // 移除依赖，避免循环
 
   // 合并在线和离线笔记，并按当前排序规则排序 - 使用 useMemo 优化
   const allNotes = useMemo(() => {
     const onlineNotes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
+
     const offlineNotesConverted = offlineNotes.map(note => ({
       ...note,
       role: "OWNER" as const,
@@ -92,7 +109,7 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
       })) // 将 string[] 转换为 Tag[]
     } as Note & { isOffline: boolean }))
 
-    return [...onlineNotes, ...offlineNotesConverted].sort((a, b) => {
+    const result = [...onlineNotes, ...offlineNotesConverted].sort((a, b) => {
       // 根据当前排序规则排序
       const [sortField, sortDirection] = sortOrder.split("_")
       const multiplier = sortDirection === "desc" ? -1 : 1
@@ -123,6 +140,8 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
 
       return (aValue - bValue) * multiplier
     })
+
+    return result
   }, [data, offlineNotes, sortOrder])
 
   return {

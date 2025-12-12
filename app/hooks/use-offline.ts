@@ -175,12 +175,18 @@ class OfflineManager {
 
   // 更新离线笔记
   async updateOfflineNote(noteId: string, updates: Partial<OfflineNote>): Promise<void> {
+    console.log('[DEBUG] updateOfflineNote called:', noteId, updates)
     if (!this.db) await this.initDB()
 
     const note = await this.getOfflineNote(noteId)
     if (note) {
+      console.log('[DEBUG] Found note to update:', note.title)
       const updatedNote = { ...note, ...updates, updatedAt: new Date() }
+      console.log('[DEBUG] Updated note:', updatedNote.title, updatedNote.tags)
       await this.saveOfflineNote(updatedNote)
+      console.log('[DEBUG] Note saved successfully')
+    } else {
+      console.log('[DEBUG] Note not found:', noteId)
     }
   }
 
@@ -271,6 +277,9 @@ class OfflineManager {
 // 创建单例实例
 const offlineManager = new OfflineManager()
 
+// 全局刷新回调
+let globalRefreshCallback: (() => void) | null = null
+
 // React Hook for offline functionality
 export function useOffline() {
   const [isOnline, setIsOnline] = useState(false)
@@ -325,12 +334,19 @@ export function useOffline() {
     }
   }, [updatePendingCount, queryClient, isClient])
 
-  // 定期检查待同步数量（用于实时更新UI）
-  useEffect(() => {
-    if (!isClient) return
-    const interval = setInterval(updatePendingCount, 5000) // 每5秒更新一次
-    return () => clearInterval(interval)
-  }, [updatePendingCount, isClient])
+  // 设置全局刷新回调
+  const setGlobalRefreshCallback = useCallback((callback: () => void) => {
+    console.log('[DEBUG] Setting global refresh callback')
+    globalRefreshCallback = callback
+  }, [])
+
+  // 触发全局刷新
+  const triggerGlobalRefresh = useCallback(() => {
+    console.log('[DEBUG] Triggering global refresh, callback exists:', !!globalRefreshCallback)
+    if (globalRefreshCallback) {
+      globalRefreshCallback()
+    }
+  }, [])
 
   return {
     isOnline,
@@ -341,6 +357,8 @@ export function useOffline() {
     getOfflineNotes: isClient ? offlineManager.getOfflineNotes.bind(offlineManager) : async () => [],
     getOfflineNote: isClient ? offlineManager.getOfflineNote.bind(offlineManager) : async () => null,
     deleteOfflineNote: isClient ? offlineManager.deleteOfflineNote.bind(offlineManager) : async () => {},
+    setGlobalRefreshCallback,
+    triggerGlobalRefresh,
   }
 }
 

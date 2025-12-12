@@ -41,7 +41,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
   const isFirstLoad = useRef(true)
 
   // 离线功能
-  const { getOfflineNote, updateOfflineNote } = useOffline()
+  const { getOfflineNote, updateOfflineNote, triggerGlobalRefresh } = useOffline()
 
   // 检查是否是离线笔记
   const isOfflineNote = noteId?.startsWith('local_')
@@ -216,6 +216,18 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
               yTitle.delete(0, yTitle.length)
               yTitle.insert(0, newTitle)
           })
+
+          // 如果是离线笔记，同时更新 IndexedDB 中的元数据
+          if (isOfflineNote) {
+            console.log('[DEBUG] Updating offline note title:', noteId, newTitle)
+            updateOfflineNote(noteId!, { title: newTitle }).then(() => {
+              console.log('[DEBUG] Offline note title updated, triggering global refresh')
+              // 立即触发离线笔记列表刷新
+              triggerGlobalRefresh()
+            }).catch(error => {
+              console.error('Failed to update offline note title:', error)
+            })
+          }
       }
   }
 
@@ -238,8 +250,14 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["note", noteId] })
-      queryClient.invalidateQueries({ queryKey: ["notes"] })
+      if (isOfflineNote) {
+        // 离线笔记：触发列表刷新
+        triggerGlobalRefresh()
+      } else {
+        // 在线笔记：通过 React Query 刷新
+        queryClient.invalidateQueries({ queryKey: ["note", noteId] })
+        queryClient.invalidateQueries({ queryKey: ["notes"] })
+      }
     },
     onError: () => {
       toast.error(isOfflineNote ? "离线保存失败" : "保存失败，请检查网络")
