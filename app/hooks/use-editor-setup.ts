@@ -119,7 +119,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
         const { token, role: wsRole } = await res.json()
 
         wsProvider = new HocuspocusProvider({
-          url: `ws://localhost:1234`,
+          url: process.env.NEXT_PUBLIC_HOCUSPOCUS_URL || 'ws://localhost:1234',
           name: noteId,
           token,
           document: yDoc,
