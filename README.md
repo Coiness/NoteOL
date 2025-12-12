@@ -41,6 +41,29 @@ npm run dev
 
 - 安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
+### 环境变量配置
+
+1. **复制环境变量模板**：
+
+```bash
+cp .env.example .env
+```
+
+2. **编辑 `.env` 文件**，配置必要的环境变量：
+
+   必需配置的项目：
+   - `NEXTAUTH_SECRET`：用于NextAuth认证的安全密钥
+   - `EMAIL_SERVER_USER`：你的邮箱地址
+   - `EMAIL_SERVER_PASSWORD`：邮箱SMTP密码
+
+   示例配置：
+
+   ```env
+   NEXTAUTH_SECRET="your_secure_random_string"
+   EMAIL_SERVER_USER=your_email@qq.com
+   EMAIL_SERVER_PASSWORD=your_smtp_password
+   ```
+
 ### 部署步骤
 
 1. **克隆项目**（如果还没有的话）：
