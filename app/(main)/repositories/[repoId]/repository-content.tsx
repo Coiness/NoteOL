@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { NoteList } from "@/components/editor/note-list"
 import { NoteDetail } from "@/components/editor/note-detail"
+import { OfflineNoteDetail } from "@/components/editor/offline-note-detail"
 import { ResizableLayout } from "@/components/layout/resizable-layout"
 import { FileText } from "lucide-react"
 import { useOffline } from "@/app/hooks/use-offline"
@@ -109,13 +110,20 @@ export function RepositoryContent() {
       sidebar={<NoteList repositoryId={repoId} />}
     >
       {noteId ? (
-        <NoteDetail
-          key={noteId} // 添加 key 以强制重新渲染组件当 noteId 变化时
-          noteId={noteId}
-          repositoryId={repoId}
-          isDefaultRepository={repository?.isDefault}
-          onDeleteSuccess={handleNoteDelete}
-        />
+        (() => {
+          const isOfflineNote = noteId.startsWith('local_')
+          return isOfflineNote ? (
+            <OfflineNoteDetail noteId={noteId} key={noteId} />
+          ) : (
+            <NoteDetail
+              key={noteId} // 添加 key 以强制重新渲染组件当 noteId 变化时
+              noteId={noteId}
+              repositoryId={repoId}
+              isDefaultRepository={repository?.isDefault}
+              onDeleteSuccess={handleNoteDelete}
+            />
+          )
+        })()
       ) : (
         <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
           <FileText className="h-16 w-16 mb-4 opacity-20" />

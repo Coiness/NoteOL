@@ -15,6 +15,14 @@ vi.mock('next/navigation', () => ({
   })
 }))
 
+// Mock next-auth
+vi.mock('next-auth/react', () => ({
+  useSession: () => ({
+    data: { user: { id: 'test-user-id', name: 'Test User' } },
+    status: 'authenticated'
+  })
+}))
+
 // Mock toast
 vi.mock('sonner', () => ({
   toast: {

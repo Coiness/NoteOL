@@ -53,14 +53,17 @@ export function RepositoryList() {
   const { data: repositories, isLoading } = useQuery<Repository[]>({
     queryKey: ["repositories"],
     queryFn: async () => {
+      console.log('[知识库列表] 开始获取数据，isOnline:', isOnline)
       // 在线时从服务器获取并缓存
       if (isOnline) {
         try {
+          console.log('[知识库列表] 在线模式，从服务器获取')
           const res = await fetch("/api/repositories")
           if (!res.ok) throw new Error("Failed to fetch repositories")
           const data = await res.json()
           const repos = data.data
 
+          console.log('[知识库列表] 获取到数据:', repos?.length || 0, '个知识库，准备缓存')
           // 缓存到 IndexedDB
           await cacheRepositories(repos)
 
@@ -68,11 +71,12 @@ export function RepositoryList() {
         } catch (error) {
           console.log("Failed to fetch from server, trying cache:", error)
           // 服务器请求失败时，回退到缓存
+          console.log('[知识库列表] 服务器失败，回退到缓存')
           return await getCachedRepositories()
         }
       } else {
         // 离线时从缓存获取
-        console.log("Offline mode: loading repositories from cache")
+        console.log('[知识库列表] 离线模式，从缓存获取')
         return await getCachedRepositories()
       }
     },
@@ -81,6 +85,7 @@ export function RepositoryList() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      console.log('[删除知识库] 开始删除，id:', id)
       const res = await fetch(`/api/repositories/${id}`, {
         method: "DELETE",
       })
@@ -90,11 +95,13 @@ export function RepositoryList() {
       }
     },
     onSuccess: () => {
+      console.log('[删除知识库] 删除成功，刷新查询缓存')
       queryClient.invalidateQueries({ queryKey: ["repositories"] })
       toast.success("知识库已删除")
       setDeletingRepo(null)
     },
     onError: (error: Error) => {
+      console.log('[删除知识库] 删除失败:', error.message)
       toast.error(error.message)
     },
   })

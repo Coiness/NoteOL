@@ -24,6 +24,7 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
     try {
       setIsLoadingCached(true)
       const cached = await getCachedNotesList(repositoryId || 'all')
+      console.log('[笔记列表] 加载缓存数据:', cached?.length || 0, '条，repositoryId:', repositoryId || 'all')
       if (cached) {
         setCachedNotes(cached)
       }
@@ -82,9 +83,11 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
   useEffect(() => {
     if (data?.pages) {
       const allOnlineNotes = data.pages.flatMap((page: any) => page.notes) as Note[]
+      console.log('[笔记列表] 收到在线数据:', allOnlineNotes.length, '条，准备更新缓存')
       if (allOnlineNotes.length > 0) {
         cacheNotesList(repositoryId || 'all', allOnlineNotes)
           .then(() => {
+            console.log('[笔记列表] 缓存更新成功')
             // 更新本地状态
             setCachedNotes(allOnlineNotes)
           })
@@ -95,7 +98,6 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
     }
   }, [data, repositoryId, cacheNotesList])
 
-  const onlineNotes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
   const [offlineNotes, setOfflineNotes] = useState<OfflineNote[]>([])
 
   // 离线功能
@@ -140,6 +142,9 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
 
   // 合并缓存、在线和离线笔记，并按当前排序规则排序 - 使用 useMemo 优化
   const allNotes = useMemo(() => {
+    // 计算在线笔记
+    const onlineNotes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
+
     // 优先使用缓存数据，如果没有缓存则使用在线数据
     const primaryNotes = cachedNotes.length > 0 ? cachedNotes : onlineNotes
 
@@ -190,7 +195,7 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
     })
 
     return result
-  }, [cachedNotes, onlineNotes, offlineNotes, sortOrder])
+  }, [cachedNotes, data, offlineNotes, sortOrder])
 
   // 综合加载状态：如果有缓存数据就不是加载中，否则等待在线数据
   const isLoading = isLoadingCached && cachedNotes.length === 0 && isLoadingOnline

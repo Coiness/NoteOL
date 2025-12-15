@@ -19,6 +19,7 @@ class OfflineManager {
     // 只在客户端初始化
     if (typeof window !== 'undefined') {
       this.isOnline = navigator.onLine
+      console.log('[网络状态] 初始化，navigator.onLine:', navigator.onLine, 'isOnline:', this.isOnline)
       this.initDB()
       this.setupNetworkListeners()
     }
@@ -73,13 +74,19 @@ class OfflineManager {
   private setupNetworkListeners() {
     if (typeof window === 'undefined') return
 
+    console.log('[网络状态] 设置网络监听器')
+
     window.addEventListener('online', () => {
+      console.log('[网络状态] 收到 online 事件，之前状态:', this.isOnline)
       this.isOnline = true
+      console.log('[网络状态] 更新为在线状态，当前状态:', this.isOnline)
       this.syncPendingOperations()
     })
 
     window.addEventListener('offline', () => {
+      console.log('[网络状态] 收到 offline 事件，之前状态:', this.isOnline)
       this.isOnline = false
+      console.log('[网络状态] 更新为离线状态，当前状态:', this.isOnline)
     })
   }
 
@@ -94,19 +101,31 @@ class OfflineManager {
     content?: string
     tags?: string[]
     repositoryId?: string
-  }): Promise<OfflineNote> {
+  }, userId: string): Promise<OfflineNote> {
+    console.log('[IndexedDB] 创建离线笔记，data:', data, 'userId:', userId)
+
+    // 如果没有指定仓库，使用默认仓库
+    let repositoryId = data.repositoryId
+    if (!repositoryId) {
+      const defaultRepo = await this.getOrCreateDefaultRepository(userId)
+      repositoryId = defaultRepo.id
+      console.log('[IndexedDB] 使用默认仓库:', repositoryId)
+    }
+
     const note: OfflineNote = {
       id: this.generateLocalNoteId(),
       title: data.title,
       content: data.content || '',
       tags: data.tags || [],
-      repositoryId: data.repositoryId,
+      repositoryId: repositoryId,
       createdAt: new Date(),
       updatedAt: new Date(),
       status: 'pending'
     }
 
+    console.log('[IndexedDB] 保存离线笔记到数据库，noteId:', note.id)
     await this.saveOfflineNote(note)
+    console.log('[IndexedDB] 离线笔记保存完成')
     return note
   }
 
@@ -255,6 +274,7 @@ class OfflineManager {
 
   // 缓存知识库列表到 IndexedDB
   async cacheRepositories(repositories: any[]): Promise<void> {
+    console.log('[IndexedDB] 缓存知识库列表，repositories:', repositories?.length || 0, '个')
     if (!this.db) await this.initDB()
 
     return new Promise((resolve, reject) => {
@@ -264,11 +284,13 @@ class OfflineManager {
       // 清空旧数据
       const clearRequest = store.clear()
       clearRequest.onsuccess = () => {
+        console.log('[IndexedDB] 旧知识库数据已清空')
         // 添加新数据
         let completed = 0
         const total = repositories.length
 
         if (total === 0) {
+          console.log('[IndexedDB] 无新数据需要缓存')
           resolve()
           return
         }
@@ -278,6 +300,7 @@ class OfflineManager {
           request.onsuccess = () => {
             completed++
             if (completed === total) {
+              console.log('[IndexedDB] 知识库列表缓存完成')
               resolve()
             }
           }
@@ -330,8 +353,39 @@ class OfflineManager {
     })
   }
 
+  // 获取或创建默认仓库
+  async getOrCreateDefaultRepository(userId: string): Promise<any> {
+    if (!this.db) await this.initDB()
+
+    // 1. 尝试从缓存获取默认仓库
+    const cachedRepos = await this.getCachedRepositories()
+    const defaultRepo = cachedRepos.find((repo: any) => repo.isDefault && repo.userId === userId)
+
+    if (defaultRepo) {
+      console.log('[默认仓库] 找到缓存的默认仓库:', defaultRepo.id)
+      return defaultRepo
+    }
+
+    // 2. 如果缓存中没有，创建本地默认仓库
+    const localDefaultRepo = {
+      id: `default_${userId}`,
+      name: "默认知识库",
+      description: "离线创建的笔记默认存放位置",
+      isDefault: true,
+      userId: userId,
+      color: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    console.log('[默认仓库] 创建本地默认仓库:', localDefaultRepo.id)
+    await this.cacheRepository(localDefaultRepo)
+    return localDefaultRepo
+  }
+
   // 缓存笔记列表
   async cacheNotesList(repositoryId: string, notes: any[]): Promise<void> {
+    console.log('[IndexedDB] 缓存笔记列表，repositoryId:', repositoryId, 'notes:', notes?.length || 0, '条')
     if (!this.db) await this.initDB()
 
     return new Promise((resolve, reject) => {
@@ -344,14 +398,22 @@ class OfflineManager {
         updatedAt: new Date()
       }
 
+      console.log('[IndexedDB] 存储笔记列表数据到数据库')
       const request = store.put(notesListData)
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
+      request.onsuccess = () => {
+        console.log('[IndexedDB] 笔记列表缓存成功')
+        resolve()
+      }
+      request.onerror = () => {
+        console.error('[IndexedDB] 笔记列表缓存失败:', request.error)
+        reject(request.error)
+      }
     })
   }
 
   // 获取缓存的笔记列表
   async getCachedNotesList(repositoryId: string): Promise<any[] | null> {
+    console.log('[IndexedDB] 获取缓存笔记列表，repositoryId:', repositoryId)
     if (!this.db) await this.initDB()
 
     return new Promise((resolve, reject) => {
@@ -361,9 +423,13 @@ class OfflineManager {
 
       request.onsuccess = () => {
         const result = request.result
+        console.log('[IndexedDB] 获取缓存结果:', result ? result.notes?.length || 0 : 0, '条笔记')
         resolve(result ? result.notes : null)
       }
-      request.onerror = () => reject(request.error)
+      request.onerror = () => {
+        console.error('[IndexedDB] 获取缓存失败:', request.error)
+        reject(request.error)
+      }
     })
   }
 
@@ -478,9 +544,9 @@ export function useOffline() {
     content?: string
     tags?: string[]
     repositoryId?: string
-  }) => {
+  }, userId: string) => {
     if (!isClient) throw new Error('Not available on server')
-    return offlineManager.createOfflineNote(data)
+    return offlineManager.createOfflineNote(data, userId)
   }, [isClient])
 
   const updateOfflineNote = useCallback(async (noteId: string, updates: Partial<OfflineNote>) => {
