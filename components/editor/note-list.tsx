@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, memo } from "react"
 import Link from "next/link"
-import { useParams, useSearchParams } from "next/navigation"
+import { useParams, useSearchParams, useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +12,8 @@ import { cn, stripHtml, getTagColor } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { useDebounce } from "@/app/hooks/use-debounce"
+import { useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,14 +37,34 @@ const NoteItem = memo(({
   note, 
   repositoryId, 
   currentNoteId, 
-  onSettingsClick 
+  onSettingsClick,
+  isOnline
 }: { 
   note: Note & { isOffline?: boolean }
   repositoryId?: string
   currentNoteId?: string | null
   onSettingsClick: (e: React.MouseEvent) => void
+  isOnline: boolean
 }) => {
-  const href = repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`
+  // 根据网络状态和笔记类型决定跳转目标
+  const getHref = () => {
+    // 如果是离线笔记，始终使用离线路由
+    if (note.isOffline) {
+      // 对于离线笔记，从 note 对象本身获取 repositoryId
+      const noteRepoId = (note as any).repositoryId || repositoryId
+      return `/repositories/${noteRepoId}/offline/${note.id}`
+    }
+    
+    // 如果当前离线，使用离线路由
+    if (!isOnline) {
+      return `/repositories/${repositoryId}/offline/${note.id}`
+    }
+    
+    // 在线状态使用查询参数路由
+    return repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`
+  }
+  
+  const href = getHref()
   
   return (
     <Link
@@ -65,18 +88,18 @@ const NoteItem = memo(({
           <Badge 
             key={typeof tag === 'string' ? tag : tag.id} 
             variant={getTagColor(typeof tag === 'string' ? tag : tag.name)} 
-            className="text-10px px-1 py-0 h-4"
+            className="text-[10px] px-1 py-0 h-4"
           >
             #{typeof tag === 'string' ? tag : tag.name}
           </Badge>
         ))}
       </div>
       <div className="text-xs text-muted-foreground flex justify-between items-center">
-        <span className="truncate max-w-150px">
+        <span className="truncate max-w-[150px]">
           {stripHtml(note.content || "").slice(0, 30) || "无内容"}
         </span>
         <div className="flex items-center gap-2" onClick={onSettingsClick}>
-          <span className="text-10px">
+          <span className="text-[10px]">
             {formatDistanceToNow(new Date(note.updatedAt), { 
               addSuffix: true,
               locale: zhCN 
@@ -101,6 +124,7 @@ const VirtualizedNoteItem = ({ index, style, data }: { index: number; style: Rea
         repositoryId={data.repositoryId}
         currentNoteId={data.currentNoteId}
         onSettingsClick={data.onSettingsClick}
+        isOnline={data.isOnline}
       />
     </div>
   )
@@ -109,6 +133,9 @@ const VirtualizedNoteItem = ({ index, style, data }: { index: number; style: Rea
 export function NoteList({ repositoryId }: NoteListProps) {
   const params = useParams()
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const { data: session } = useSession()
+  const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearchQuery = useDebounce(searchQuery, 500)
   const [sortOrder, setSortOrder] = useState<"updated_desc" | "updated_asc" | "created_desc" | "created_asc" | "title_asc" | "title_desc">("updated_desc")
@@ -122,6 +149,11 @@ export function NoteList({ repositoryId }: NoteListProps) {
   })
 
   const { createMutation, isOnline } = useNoteOperations({ repositoryId })
+
+  // 监控网络状态变化
+  useEffect(() => {
+    console.log('[NoteList] 网络状态变化，isOnline:', isOnline)
+  }, [isOnline])
 
   // 获取当前排序的显示文本
   const getCurrentSortLabel = () => {
@@ -243,7 +275,67 @@ export function NoteList({ repositoryId }: NoteListProps) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => createMutation.mutate()}>
+                    <DropdownMenuItem onClick={async () => {
+                      console.log('[下拉菜单创建按钮] 直接执行创建逻辑，时间戳:', Date.now())
+
+                      try {
+                        // 直接执行创建逻辑，绕过 React Query
+                        let actualOnline = false
+                        try {
+                          const testResponse = await fetch('/api/repositories', {
+                            method: 'HEAD',
+                            cache: 'no-cache',
+                            signal: AbortSignal.timeout(3000)
+                          })
+                          actualOnline = testResponse.ok
+                        } catch (error) {
+                          actualOnline = false
+                        }
+
+                        if (actualOnline) {
+                          console.log('[直接创建] 在线模式，调用 API')
+                          const res = await fetch("/api/notes", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              title: "无标题笔记",
+                              repositoryId: repositoryId
+                            }),
+                          })
+
+                          if (!res.ok) throw new Error("Failed to create note")
+                          const result = await res.json()
+
+                          // 手动刷新缓存
+                          queryClient.invalidateQueries({ queryKey: repositoryId ? ["notes", repositoryId] : ["notes"] })
+
+                          // 跳转到新创建的笔记
+                          if (repositoryId) {
+                            router.push(`/repositories/${repositoryId}?noteId=${result.data.id}`)
+                          } else {
+                            router.push(`/notes/${result.data.id}`)
+                          }
+                        } else {
+                          console.log('[直接创建] 离线模式，创建本地笔记')
+                          // 直接使用导出的 offlineManager 实例
+                          const { offlineManager } = await import('@/app/hooks/use-offline')
+
+                          const offlineNote = await offlineManager.createOfflineNote({
+                            title: "无标题笔记",
+                            repositoryId: repositoryId
+                          }, session?.user?.id || '')
+
+                          // 手动刷新缓存
+                          queryClient.invalidateQueries({ queryKey: repositoryId ? ["notes", repositoryId] : ["notes"] })
+
+                          // 跳转到离线笔记 - 统一使用离线路由格式
+                          router.push(`/repositories/${offlineNote.repositoryId}/offline/${offlineNote.id}`)
+                        }
+                      } catch (error) {
+                        console.error('创建笔记失败:', error)
+                        toast.error('创建笔记失败')
+                      }
+                    }}>
                       <Plus className="mr-2 h-4 w-4" />
                       新建笔记
                     </DropdownMenuItem>
@@ -257,8 +349,68 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 <Button 
                     size="icon" 
                     variant="ghost" 
-                    onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending}
+                    onClick={async () => {
+                      console.log('[创建按钮] 直接执行创建逻辑，时间戳:', Date.now())
+
+                      try {
+                        // 直接执行创建逻辑，绕过 React Query
+                        let actualOnline = false
+                        try {
+                          const testResponse = await fetch('/api/repositories', {
+                            method: 'HEAD',
+                            cache: 'no-cache',
+                            signal: AbortSignal.timeout(3000)
+                          })
+                          actualOnline = testResponse.ok
+                        } catch (error) {
+                          actualOnline = false
+                        }
+
+                        if (actualOnline) {
+                          console.log('[直接创建] 在线模式，调用 API')
+                          const res = await fetch("/api/notes", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              title: "无标题笔记",
+                              repositoryId: repositoryId
+                            }),
+                          })
+
+                          if (!res.ok) throw new Error("Failed to create note")
+                          const result = await res.json()
+
+                          // 手动刷新缓存
+                          queryClient.invalidateQueries({ queryKey: repositoryId ? ["notes", repositoryId] : ["notes"] })
+
+                          // 跳转到新创建的笔记
+                          if (repositoryId) {
+                            router.push(`/repositories/${repositoryId}?noteId=${result.data.id}`)
+                          } else {
+                            router.push(`/notes/${result.data.id}`)
+                          }
+                        } else {
+                          console.log('[直接创建] 离线模式，创建本地笔记')
+                          // 直接使用导出的 offlineManager 实例
+                          const { offlineManager } = await import('@/app/hooks/use-offline')
+
+                          const offlineNote = await offlineManager.createOfflineNote({
+                            title: "无标题笔记",
+                            repositoryId: repositoryId
+                          }, session?.user?.id || '')
+
+                          // 手动刷新缓存
+                          queryClient.invalidateQueries({ queryKey: repositoryId ? ["notes", repositoryId] : ["notes"] })
+
+                          // 跳转到离线笔记专用路由
+                          router.push(`/repositories/${offlineNote.repositoryId}/offline/${offlineNote.id}`)
+                        }
+                      } catch (error) {
+                        console.error('创建笔记失败:', error)
+                        toast.error('创建笔记失败')
+                      }
+                    }}
+                    disabled={false}
                     className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 >
                 {createMutation.isPending ? (
@@ -293,7 +445,67 @@ export function NoteList({ repositoryId }: NoteListProps) {
             {!searchQuery && (
                 <Button 
                     variant="link" 
-                    onClick={() => createMutation.mutate()}
+                    onClick={async () => {
+                      console.log('[空状态创建按钮] 直接执行创建逻辑，时间戳:', Date.now())
+
+                      try {
+                        // 直接执行创建逻辑，绕过 React Query
+                        let actualOnline = false
+                        try {
+                          const testResponse = await fetch('/api/repositories', {
+                            method: 'HEAD',
+                            cache: 'no-cache',
+                            signal: AbortSignal.timeout(3000)
+                          })
+                          actualOnline = testResponse.ok
+                        } catch (error) {
+                          actualOnline = false
+                        }
+
+                        if (actualOnline) {
+                          console.log('[直接创建] 在线模式，调用 API')
+                          const res = await fetch("/api/notes", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              title: "无标题笔记",
+                              repositoryId: repositoryId
+                            }),
+                          })
+
+                          if (!res.ok) throw new Error("Failed to create note")
+                          const result = await res.json()
+
+                          // 手动刷新缓存
+                          queryClient.invalidateQueries({ queryKey: repositoryId ? ["notes", repositoryId] : ["notes"] })
+
+                          // 跳转到新创建的笔记
+                          if (repositoryId) {
+                            router.push(`/repositories/${repositoryId}?noteId=${result.data.id}`)
+                          } else {
+                            router.push(`/notes/${result.data.id}`)
+                          }
+                        } else {
+                          console.log('[直接创建] 离线模式，创建本地笔记')
+                          // 直接使用导出的 offlineManager 实例
+                          const { offlineManager } = await import('@/app/hooks/use-offline')
+
+                          const offlineNote = await offlineManager.createOfflineNote({
+                            title: "无标题笔记",
+                            repositoryId: repositoryId
+                          }, session?.user?.id || '')
+
+                          // 手动刷新缓存
+                          queryClient.invalidateQueries({ queryKey: repositoryId ? ["notes", repositoryId] : ["notes"] })
+
+                          // 跳转到离线笔记 - 使用专用离线路由
+                          router.push(`/repositories/${offlineNote.repositoryId}/offline/${offlineNote.id}`)
+                        }
+                      } catch (error) {
+                        console.error('创建笔记失败:', error)
+                        toast.error('创建笔记失败')
+                      }
+                    }}
                     className="mt-2"
                 >
                     创建第一篇笔记
@@ -309,6 +521,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 repositoryId={repositoryId}
                 currentNoteId={currentNoteId}
                 onSettingsClick={(e) => e.preventDefault()}
+                isOnline={isOnline}
               />
             ))}
           </div>

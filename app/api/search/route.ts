@@ -164,12 +164,12 @@ export async function GET(req: NextRequest) {
         // 简单的查找，忽略大小写
         const index = plainText.toLowerCase().indexOf(query.toLowerCase())
         
-        let snippet = plainText.slice(0, 100) // 默认取前100个字符
+        let snippet = plainText.slice(0, 50) // 默认取前50个字符
         
         if (index !== -1) {
             // 截取关键词前后的一段文本
-            const start = Math.max(0, index - 30)
-            const end = Math.min(plainText.length, index + query.length + 70)
+            const start = Math.max(0, index - 15)
+            const end = Math.min(plainText.length, index + query.length + 35)
             snippet = (start > 0 ? "..." : "") + plainText.slice(start, end) + (end < plainText.length ? "..." : "")
         }
         

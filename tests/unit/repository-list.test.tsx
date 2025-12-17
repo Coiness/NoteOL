@@ -30,6 +30,15 @@ vi.mock('./repository-dialog', () => ({
   )
 }))
 
+// Mock useOffline hook
+vi.mock('@/app/hooks/use-offline', () => ({
+  useOffline: () => ({
+    isOnline: true,
+    cacheRepositories: vi.fn(),
+    getCachedRepositories: vi.fn(() => [])
+  })
+}))
+
 // Create wrapper with QueryClient
 const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const queryClient = new QueryClient({
@@ -37,30 +46,6 @@ const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   })
   return React.createElement(QueryClientProvider, { client: queryClient }, children)
 }
-
-// Mock repository data
-const mockRepositories: Repository[] = [
-  {
-    id: 'repo-1',
-    name: '默认知识库',
-    description: '系统默认知识库',
-    color: '#3b82f6',
-    isDefault: true,
-    userId: 'user-1',
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: 'repo-2',
-    name: '工作笔记',
-    description: '工作相关的笔记',
-    color: '#10b981',
-    isDefault: false,
-    userId: 'user-1',
-    createdAt: '2024-01-02T00:00:00Z',
-    updatedAt: '2024-01-02T00:00:00Z'
-  }
-]
 
 describe('RepositoryList Component', () => {
   it('should show loading state when fetching repositories', () => {
