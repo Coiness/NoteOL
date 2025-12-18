@@ -23,6 +23,7 @@ import { NoteSettingsDialog } from "@/components/editor/note-settings-dialog"
 import { ImportNoteDialog } from "@/components/editor/import-note-dialog"
 import { useNoteList } from "@/app/hooks/use-note-list"
 import { useNoteOperations } from "@/app/hooks/use-note-operations"
+import { useStore } from "@/store/useStore"
 import type { Note } from "@/types/note"
 
 interface NoteListProps {
@@ -43,6 +44,18 @@ const NoteItem = memo(({
 }) => {
   const href = repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`
   
+  // 订阅实时内容更新
+  const activeContent = useStore(state => 
+    state.activeNoteId === note.id && state.activeNoteContent !== null
+      ? state.activeNoteContent
+      : null
+  )
+
+  // 这个activeContent会有HTML结构符号吗？
+  const displayContent = activeContent 
+    ? activeContent.slice(0, 30) 
+    : stripHtml(note.content || "").slice(0, 30) || "无内容"
+
   return (
     <Link
       href={href}
@@ -73,7 +86,7 @@ const NoteItem = memo(({
       </div>
       <div className="text-xs text-muted-foreground flex justify-between items-center">
         <span className="truncate max-w-150px">
-          {stripHtml(note.content || "").slice(0, 30) || "无内容"}
+          {displayContent}
         </span>
         <div className="flex items-center gap-2" onClick={onSettingsClick}>
           <span className="text-[10px]">

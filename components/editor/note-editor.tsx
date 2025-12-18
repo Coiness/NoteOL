@@ -22,6 +22,7 @@ import randomColor from "randomcolor"
 import { Loader2, Wifi, WifiOff } from "lucide-react"
 import { useMemo } from "react"
 import { ErrorBoundary } from "react-error-boundary"
+import { useStore } from "@/store/useStore"
 
 import { Note } from "@/types"
 import { cn } from "@/lib/utils"
@@ -61,13 +62,16 @@ function EditorErrorFallback({ error, resetErrorBoundary }: { error: Error; rese
 }
 
 interface TiptapEditorProps {
+  noteId: string
   yDoc: Y.Doc
   provider: HocuspocusProvider | null
   readOnly: boolean
   session: any
 }
 
-function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) {
+function TiptapEditor({ noteId, yDoc, provider, readOnly, session }: TiptapEditorProps) {
+  const { setActiveNote, updateActiveNoteContent } = useStore()
+
   // 使用 useMemo 延迟初始化 extensions，确保 yDoc 和 provider 稳定
   const extensions = useMemo(() => [
     StarterKit.configure({
@@ -134,6 +138,16 @@ function TiptapEditor({ yDoc, provider, readOnly, session }: TiptapEditorProps) 
       },
     },
     editable: !readOnly,
+    onUpdate: ({ editor }) => {
+      updateActiveNoteContent(editor.getText())
+    },
+    onCreate: ({ editor }) => {
+      // 初始化时设置当前笔记信息
+      setActiveNote(noteId, editor.getText(), null)
+    },
+    onDestroy: () => {
+      setActiveNote(null, null, null)
+    }
   })
 
   if (!editor) {
@@ -218,6 +232,7 @@ export function NoteEditor({ note, readOnly = false, yDoc, provider, status }: N
       <ErrorBoundary FallbackComponent={EditorErrorFallback}>
         <TiptapEditor 
           key={provider ? 'online' : 'offline'}
+          noteId={note.id}
           yDoc={yDoc}
           provider={provider}
           readOnly={readOnly}
