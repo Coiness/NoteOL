@@ -24,7 +24,6 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
     try {
       setIsLoadingCached(true)
       const cached = await getCachedNotesList(repositoryId || 'all')
-      console.log('[笔记列表] 加载缓存数据:', cached?.length || 0, '条，repositoryId:', repositoryId || 'all')
       if (cached) {
         setCachedNotes(cached)
       }
@@ -62,7 +61,13 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
       params.set("page", pageParam.toString())
       params.set("limit", "20")
 
-      const res = await fetch(`/api/notes?${params.toString()}`)
+      const res = await fetch(`/api/notes?${params.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache'
+        }
+      })
       if (!res.ok) throw new Error("Failed to fetch notes")
       const json = await res.json()
       return json.data
@@ -83,11 +88,9 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
   useEffect(() => {
     if (data?.pages) {
       const allOnlineNotes = data.pages.flatMap((page: any) => page.notes) as Note[]
-      console.log('[笔记列表] 收到在线数据:', allOnlineNotes.length, '条，准备更新缓存')
       if (allOnlineNotes.length > 0) {
         cacheNotesList(repositoryId || 'all', allOnlineNotes)
           .then(() => {
-            console.log('[笔记列表] 缓存更新成功')
             // 更新本地状态
             setCachedNotes(allOnlineNotes)
           })
@@ -193,6 +196,11 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
 
       return (aValue - bValue) * multiplier
     })
+
+    // 只在数据长度变化或首条数据变化时打印
+    if (result.length > 0) {
+      // const firstNote = result[0];
+    }
 
     return result
   }, [cachedNotes, data, offlineNotes, sortOrder])

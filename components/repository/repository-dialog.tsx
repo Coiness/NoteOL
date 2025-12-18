@@ -76,17 +76,14 @@ export function RepositoryDialog({
 
   const mutation = useMutation({
     mutationFn: async (values: RepositoryFormValues) => {
-      console.log('[创建知识库] 开始创建，values:', values, 'isEdit:', isEdit)
       const url = isEdit ? `/api/repositories/${repository.id}` : "/api/repositories"
       const method = isEdit ? "PUT" : "POST"
 
-      console.log('[创建知识库] 调用 API:', method, url)
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       })
-      console.log('[创建知识库] API 响应:', res.status, res.ok)
 
       if (!res.ok) {
         const error = await res.json()
@@ -96,7 +93,6 @@ export function RepositoryDialog({
       return res.json()
     },
     onSuccess: () => {
-      console.log('[创建知识库] 创建成功，刷新查询缓存')
       queryClient.invalidateQueries({ queryKey: ["repositories"] })
       toast.success(isEdit ? "知识库已更新" : "知识库已创建")
       setOpen(false)
@@ -108,9 +104,7 @@ export function RepositoryDialog({
   })
 
   const onSubmit = (values: RepositoryFormValues) => {
-    console.log('[知识库创建] onSubmit 被调用，values:', values, '时间戳:', Date.now())
     const result = mutation.mutate(values)
-    console.log('[知识库创建] mutation.mutate() 返回结果:', result)
   }
 
   return (

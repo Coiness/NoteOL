@@ -28,18 +28,15 @@ export function OfflineNoteDetail({ noteId }: OfflineNoteDetailProps) {
   useEffect(() => {
     const loadOfflineNote = async () => {
       try {
-        console.log('[OfflineNoteDetail] 加载离线笔记:', noteId)
         const { offlineManager } = await import('@/app/hooks/use-offline')
         const offlineNote = await offlineManager.getOfflineNote(noteId)
 
         if (offlineNote) {
-          console.log('[OfflineNoteDetail] 离线笔记加载成功:', offlineNote)
           setNote(offlineNote)
           setTitle(offlineNote.title || "")
           setTags(offlineNote.tags || [])
           setContent(offlineNote.content || "")
         } else {
-          console.log('[OfflineNoteDetail] 未找到离线笔记:', noteId)
           setIsError(true)
         }
       } catch (error) {
@@ -61,7 +58,6 @@ export function OfflineNoteDetail({ noteId }: OfflineNoteDetailProps) {
     if (!note) return
 
     try {
-      console.log('[OfflineNoteDetail] 保存离线笔记:', noteId)
       const { offlineManager } = await import('@/app/hooks/use-offline')
 
       const updatedNote = {
@@ -84,7 +80,6 @@ export function OfflineNoteDetail({ noteId }: OfflineNoteDetailProps) {
   // 删除离线笔记
   const deleteOfflineNote = async () => {
     try {
-      console.log('[OfflineNoteDetail] 删除离线笔记:', noteId)
       const { offlineManager } = await import('@/app/hooks/use-offline')
       await offlineManager.deleteOfflineNote(noteId)
       toast.success('离线笔记已删除')

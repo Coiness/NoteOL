@@ -152,7 +152,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
 
   // 监控网络状态变化
   useEffect(() => {
-    console.log('[NoteList] 网络状态变化，isOnline:', isOnline)
   }, [isOnline])
 
   // 获取当前排序的显示文本
@@ -276,7 +275,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={async () => {
-                      console.log('[下拉菜单创建按钮] 直接执行创建逻辑，时间戳:', Date.now())
 
                       try {
                         // 直接执行创建逻辑，绕过 React Query
@@ -293,7 +291,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
                         }
 
                         if (actualOnline) {
-                          console.log('[直接创建] 在线模式，调用 API')
                           const res = await fetch("/api/notes", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
@@ -316,7 +313,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
                             router.push(`/notes/${result.data.id}`)
                           }
                         } else {
-                          console.log('[直接创建] 离线模式，创建本地笔记')
                           // 直接使用导出的 offlineManager 实例
                           const { offlineManager } = await import('@/app/hooks/use-offline')
 
@@ -350,7 +346,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
                     size="icon" 
                     variant="ghost" 
                     onClick={async () => {
-                      console.log('[创建按钮] 直接执行创建逻辑，时间戳:', Date.now())
 
                       try {
                         // 直接执行创建逻辑，绕过 React Query
@@ -367,7 +362,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
                         }
 
                         if (actualOnline) {
-                          console.log('[直接创建] 在线模式，调用 API')
                           const res = await fetch("/api/notes", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
@@ -390,7 +384,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
                             router.push(`/notes/${result.data.id}`)
                           }
                         } else {
-                          console.log('[直接创建] 离线模式，创建本地笔记')
                           // 直接使用导出的 offlineManager 实例
                           const { offlineManager } = await import('@/app/hooks/use-offline')
 
@@ -446,7 +439,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 <Button 
                     variant="link" 
                     onClick={async () => {
-                      console.log('[空状态创建按钮] 直接执行创建逻辑，时间戳:', Date.now())
 
                       try {
                         // 直接执行创建逻辑，绕过 React Query
@@ -463,7 +455,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
                         }
 
                         if (actualOnline) {
-                          console.log('[直接创建] 在线模式，调用 API')
                           const res = await fetch("/api/notes", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
@@ -486,7 +477,6 @@ export function NoteList({ repositoryId }: NoteListProps) {
                             router.push(`/notes/${result.data.id}`)
                           }
                         } else {
-                          console.log('[直接创建] 离线模式，创建本地笔记')
                           // 直接使用导出的 offlineManager 实例
                           const { offlineManager } = await import('@/app/hooks/use-offline')
 

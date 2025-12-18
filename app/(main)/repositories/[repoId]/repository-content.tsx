@@ -36,7 +36,6 @@ export function RepositoryContent() {
         return repo
       } else {
         // 离线时从缓存获取
-        console.log("Offline mode: loading repository from cache")
         const cachedRepo = await getCachedRepository(repoId)
         if (cachedRepo) {
           return cachedRepo
