@@ -20,6 +20,7 @@ export function RepositoryContent() {
   // 获取离线功能
   const { isOnline, isReady, cacheRepository, getCachedRepository } = useOffline()
 
+  // tips:知识库页的缓存
   const { data: repository, isLoading, error } = useQuery({
     queryKey: ["repository", repoId],
     queryFn: async () => {
@@ -64,6 +65,8 @@ export function RepositoryContent() {
 
   const handleNoteDelete = () => {
     // 删除后清除 noteId 参数，回到列表初始状态
+    // tips：没有组件处理吗？
+    // 这是作为成功回调，成功后回到列表初始状态？
     router.push(`/repositories/${repoId}`)
   }
 
@@ -100,6 +103,7 @@ export function RepositoryContent() {
   }
 
   // 如果离线且没有缓存数据，页面会重定向到 /offline，这里不应该显示
+  // tips：没看懂
   if (!repository && !isOnline) {
     return null // 让重定向处理
   }
@@ -114,6 +118,8 @@ export function RepositoryContent() {
           return isOfflineNote ? (
             <OfflineNoteDetail noteId={noteId} key={noteId} />
           ) : (
+            // tips:noteDetail 又是何许人也
+            // 原来就是我们的编辑器组件
             <NoteDetail
               key={noteId} // 添加 key 以强制重新渲染组件当 noteId 变化时
               noteId={noteId}

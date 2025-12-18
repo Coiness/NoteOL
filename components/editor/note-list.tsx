@@ -277,7 +277,9 @@ export function NoteList({ repositoryId }: NoteListProps) {
                     <DropdownMenuItem onClick={async () => {
 
                       try {
-                        // 直接执行创建逻辑，绕过 React Query
+                        // 创建笔记逻辑
+
+                        // 检查网络是否正常
                         let actualOnline = false
                         try {
                           const testResponse = await fetch('/api/repositories', {
@@ -289,7 +291,8 @@ export function NoteList({ repositoryId }: NoteListProps) {
                         } catch (error) {
                           actualOnline = false
                         }
-
+                        
+                        // 如果网络正常，直接创建在线笔记
                         if (actualOnline) {
                           const res = await fetch("/api/notes", {
                             method: "POST",
@@ -304,15 +307,20 @@ export function NoteList({ repositoryId }: NoteListProps) {
                           const result = await res.json()
 
                           // 手动刷新缓存
+                          // tips：刷新list缓存
                           queryClient.invalidateQueries({ queryKey: repositoryId ? ["notes", repositoryId] : ["notes"] })
 
                           // 跳转到新创建的笔记
                           if (repositoryId) {
+                            // 注意跳转http://localhost:3000/repositories/cmiy0qclf0003d1076g17x9gf?noteId=cmjbclf4j0002vqbsz9wrwa5l
+                            // 这正确吗？我们不是动态路由吗？
+                            // tips：存疑
                             router.push(`/repositories/${repositoryId}?noteId=${result.data.id}`)
                           } else {
                             router.push(`/notes/${result.data.id}`)
                           }
                         } else {
+                          // 若不正常，跳转离线逻辑
                           // 直接使用导出的 offlineManager 实例
                           const { offlineManager } = await import('@/app/hooks/use-offline')
 

@@ -1,3 +1,4 @@
+// tips：这个路由是？
 import { NoteDetail } from "@/components/editor/note-detail"
 import { OfflineNoteDetail } from "@/components/editor/offline-note-detail"
 
@@ -21,6 +22,7 @@ export default async function NotePage(props: PageProps) {
   }
 
   // 正常笔记：使用RSC
+  // tips:其实这页完全没用了，如果是动态路由的话
   return (
     <div className="h-[calc(100vh-4rem)]">
       <NoteDetail noteId={params.noteId} key={params.noteId} />

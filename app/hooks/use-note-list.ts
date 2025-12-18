@@ -82,6 +82,9 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
     staleTime: 1000 * 60 * 5, // 5分钟内不重新请求
     refetchOnWindowFocus: false,
     enabled: !isLoadingCached, // 只有在缓存加载完成后才获取在线数据
+    // tips:这是什么意思？
+    // 当缓存加载完成后，才开始获取在线数据
+    // 这样可以确保列表在在线数据更新时（如创建新笔记后）能及时刷新
   })
 
   // 当在线数据获取成功时，更新缓存
