@@ -70,7 +70,7 @@ interface TiptapEditorProps {
 }
 
 function TiptapEditor({ noteId, yDoc, provider, readOnly, session }: TiptapEditorProps) {
-  const { setActiveNote, updateActiveNoteContent } = useStore()
+  const { setActiveNoteId, updateNotePreview, setActiveNoteContent } = useStore()
 
   // 使用 useMemo 延迟初始化 extensions，确保 yDoc 和 provider 稳定
   const extensions = useMemo(() => [
@@ -139,14 +139,20 @@ function TiptapEditor({ noteId, yDoc, provider, readOnly, session }: TiptapEdito
     },
     editable: !readOnly,
     onUpdate: ({ editor }) => {
-      updateActiveNoteContent(editor.getText())
+      const content = editor.getText()
+      updateNotePreview(noteId, content)
+      setActiveNoteContent(content)
     },
     onCreate: ({ editor }) => {
       // 初始化时设置当前笔记信息
-      setActiveNote(noteId, editor.getText(), null)
+      setActiveNoteId(noteId)
+      const content = editor.getText()
+      updateNotePreview(noteId, content)
+      setActiveNoteContent(content)
     },
     onDestroy: () => {
-      setActiveNote(null, null, null)
+      setActiveNoteId(null)
+      setActiveNoteContent(null)
     }
   })
 

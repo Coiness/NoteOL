@@ -5,13 +5,14 @@ interface StoreState {
   increment: () => void;
   decrement: () => void;
   
-  // 活跃的笔记，用于更新NoteItem内容
+  // Active Note State for Real-time UI updates
   activeNoteId: string | null;
-  activeNoteContent: string | null; // Plain text for preview
-  activeNoteTitle: string | null;
-  setActiveNote: (id: string | null, content: string | null, title: string | null) => void;
-  updateActiveNoteContent: (content: string) => void;
-  updateActiveNoteTitle: (title: string) => void;
+  activeNoteContent: string | null;
+  // Cache previews for all edited notes to avoid content flickering
+  notePreviews: Record<string, string>; 
+  setActiveNoteId: (id: string | null) => void;
+  setActiveNoteContent: (content: string | null) => void;
+  updateNotePreview: (id: string, content: string) => void;
 }
 
 export const useStore = create<StoreState>((set) => ({
@@ -21,8 +22,10 @@ export const useStore = create<StoreState>((set) => ({
 
   activeNoteId: null,
   activeNoteContent: null,
-  activeNoteTitle: null,
-  setActiveNote: (id, content, title) => set({ activeNoteId: id, activeNoteContent: content, activeNoteTitle: title }),
-  updateActiveNoteContent: (content) => set({ activeNoteContent: content }),
-  updateActiveNoteTitle: (title) => set({ activeNoteTitle: title }),
+  notePreviews: {},
+  setActiveNoteId: (id) => set({ activeNoteId: id }),
+  setActiveNoteContent: (content) => set({ activeNoteContent: content }),
+  updateNotePreview: (id, content) => set((state) => ({
+    notePreviews: { ...state.notePreviews, [id]: content }
+  })),
 }));

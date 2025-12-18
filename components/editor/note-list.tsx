@@ -45,16 +45,19 @@ const NoteItem = memo(({
   const href = repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`
   
   // 订阅实时内容更新
-  const activeContent = useStore(state => 
-    state.activeNoteId === note.id && state.activeNoteContent !== null
-      ? state.activeNoteContent
-      : null
-  )
-
-  // 这个activeContent会有HTML结构符号吗？
-  const displayContent = activeContent 
-    ? activeContent.slice(0, 30) 
-    : stripHtml(note.content || "").slice(0, 30) || "无内容"
+  // 优先级：
+  // 1. 当前选中且正在编辑的内容 (activeNoteContent)
+  // 2. 之前编辑过缓存的内容 (notePreviews)
+  // 3. 数据库里的原始内容 (note.content)
+  const displayContent = useStore(state => {
+    if (state.activeNoteId === note.id && state.activeNoteContent !== null) {
+      return state.activeNoteContent.slice(0, 30)
+    }
+    if (state.notePreviews[note.id]) {
+      return state.notePreviews[note.id].slice(0, 30)
+    }
+    return stripHtml(note.content || "").slice(0, 30) || "无内容"
+  })
 
   return (
     <Link
