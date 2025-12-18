@@ -19,7 +19,8 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 const nextConfig: NextConfig = {
   /* config options here */
   output: "standalone",
-  turbopack: {},
+  // 禁用turbopack，使用webpack
+  //turbopack: {},
 };
 
 export default withBundleAnalyzer(withPWA(nextConfig));
