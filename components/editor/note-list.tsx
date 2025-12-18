@@ -65,7 +65,7 @@ const NoteItem = memo(({
           <Badge 
             key={typeof tag === 'string' ? tag : tag.id} 
             variant={getTagColor(typeof tag === 'string' ? tag : tag.name)} 
-            className="text-10px px-1 py-0 h-4"
+            className="text-[10px] px-1 py-0 h-4"
           >
             #{typeof tag === 'string' ? tag : tag.name}
           </Badge>
@@ -76,7 +76,7 @@ const NoteItem = memo(({
           {stripHtml(note.content || "").slice(0, 30) || "无内容"}
         </span>
         <div className="flex items-center gap-2" onClick={onSettingsClick}>
-          <span className="text-10px">
+          <span className="text-[10px]">
             {formatDistanceToNow(new Date(note.updatedAt), { 
               addSuffix: true,
               locale: zhCN 

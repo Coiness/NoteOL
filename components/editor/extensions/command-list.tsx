@@ -65,7 +65,7 @@ export const CommandList = forwardRef((props: any, ref) => {
   }
 
   return (
-    <div id="slash-command-list" className="z-50 h-auto max-h-330px w-72 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md animate-in fade-in zoom-in-95 duration-200">
+    <div id="slash-command-list" className="z-50 h-auto max-h-[330px] w-72 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md animate-in fade-in zoom-in-95 duration-200">
       <div className="flex flex-col gap-1">
         {props.items.map((item: any, index: number) => {
           const Icon = item.icon
