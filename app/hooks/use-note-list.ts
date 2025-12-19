@@ -13,13 +13,41 @@ interface UseNoteListProps {
 }
 
 export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteListProps) {
-  // 获取在线笔记列表 (无限滚动)
+  const [cachedNotes, setCachedNotes] = useState<Note[]>([])
+  const [isLoadingCached, setIsLoadingCached] = useState(true)
+
+  // 获取离线管理器方法
+  const { cacheNotesList, getCachedNotesList } = useOffline()
+
+  // 加载缓存的笔记列表
+  const loadCachedNotes = useCallback(async () => {
+    try {
+      setIsLoadingCached(true)
+      const cached = await getCachedNotesList(repositoryId || 'all')
+      console.log('[笔记列表] 加载缓存数据:', cached?.length || 0, '条，repositoryId:', repositoryId || 'all')
+      if (cached) {
+        setCachedNotes(cached)
+      }
+    } catch (error) {
+      console.error('Failed to load cached notes:', error)
+    } finally {
+      setIsLoadingCached(false)
+    }
+  }, [repositoryId, getCachedNotesList])
+
+  // 组件挂载时加载缓存数据
+  useEffect(() => {
+    loadCachedNotes()
+  }, [loadCachedNotes])
+
+  // 获取在线笔记列表 (无限滚动) - 现在作为后台更新
   const {
     data,
-    isLoading,
+    isLoading: isLoadingOnline,
     fetchNextPage,
     hasNextPage,
-    isFetchingNextPage
+    isFetchingNextPage,
+    refetch
   } = useInfiniteQuery({
     queryKey: ["notes", repositoryId, searchQuery, sortOrder],
     queryFn: async ({ pageParam = 1 }) => {
@@ -46,11 +74,30 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
       return undefined
     },
     initialPageParam: 1,
-    staleTime: 1000 * 10, // 10秒内不重新请求
+    staleTime: 1000 * 60 * 5, // 5分钟内不重新请求
     refetchOnWindowFocus: false,
+    enabled: !isLoadingCached, // 只有在缓存加载完成后才获取在线数据
   })
 
-  const notes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
+  // 当在线数据获取成功时，更新缓存
+  useEffect(() => {
+    if (data?.pages) {
+      const allOnlineNotes = data.pages.flatMap((page: any) => page.notes) as Note[]
+      console.log('[笔记列表] 收到在线数据:', allOnlineNotes.length, '条，准备更新缓存')
+      if (allOnlineNotes.length > 0) {
+        cacheNotesList(repositoryId || 'all', allOnlineNotes)
+          .then(() => {
+            console.log('[笔记列表] 缓存更新成功')
+            // 更新本地状态
+            setCachedNotes(allOnlineNotes)
+          })
+          .catch(error => {
+            console.error('Failed to cache notes list:', error)
+          })
+      }
+    }
+  }, [data, repositoryId, cacheNotesList])
+
   const [offlineNotes, setOfflineNotes] = useState<OfflineNote[]>([])
 
   // 离线功能
@@ -93,9 +140,13 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
     // return () => clearInterval(interval)
   }, []) // 移除依赖，避免循环
 
-  // 合并在线和离线笔记，并按当前排序规则排序 - 使用 useMemo 优化
+  // 合并缓存、在线和离线笔记，并按当前排序规则排序 - 使用 useMemo 优化
   const allNotes = useMemo(() => {
+    // 计算在线笔记
     const onlineNotes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
+
+    // 优先使用缓存数据，如果没有缓存则使用在线数据
+    const primaryNotes = cachedNotes.length > 0 ? cachedNotes : onlineNotes
 
     const offlineNotesConverted = offlineNotes.map(note => ({
       ...note,
@@ -111,7 +162,7 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
       })) // 将 string[] 转换为 Tag[]
     } as Note & { isOffline: boolean }))
 
-    const result = [...onlineNotes, ...offlineNotesConverted].sort((a, b) => {
+    const result = [...primaryNotes, ...offlineNotesConverted].sort((a, b) => {
       // 根据当前排序规则排序
       const [sortField, sortDirection] = sortOrder.split("_")
       const multiplier = sortDirection === "desc" ? -1 : 1
@@ -144,7 +195,10 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
     })
 
     return result
-  }, [data, offlineNotes, sortOrder])
+  }, [cachedNotes, data, offlineNotes, sortOrder])
+
+  // 综合加载状态：如果有缓存数据就不是加载中，否则等待在线数据
+  const isLoading = isLoadingCached && cachedNotes.length === 0 && isLoadingOnline
 
   return {
     allNotes,
@@ -152,5 +206,8 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    refetch,
+    // 暴露缓存状态供调试
+    hasCachedData: cachedNotes.length > 0
   }
 }

@@ -3,7 +3,7 @@
 import { SessionProvider, signOut } from "next-auth/react"
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query"
 import { ThemeProvider } from "next-themes"
-import { ReactNode, useState } from "react"
+import { ReactNode, useState, useEffect } from "react"
 import { toast } from "sonner"
 
 interface ProvidersProps {
@@ -38,6 +38,9 @@ export function Providers({ children }: ProvidersProps) {
         }
     })
   }))
+
+  // Service Worker registration is now handled by next-pwa automatically
+  // Removed manual registration to avoid conflicts
 
   return (
     <SessionProvider>

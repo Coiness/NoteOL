@@ -178,7 +178,7 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-500px">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>笔记设置</DialogTitle>
           <DialogDescription>
