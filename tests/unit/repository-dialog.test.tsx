@@ -161,13 +161,14 @@ describe('RepositoryDialog Component', () => {
     const triggerButton = screen.getByRole('button', { name: /新建知识库/ })
     await user.click(triggerButton)
 
-    await waitFor(async () => {
-      const nameInput = screen.getByLabelText('名称')
-      await user.type(nameInput, 'a'.repeat(51)) // 51 characters
+    // Wait for dialog to open
+    const nameInput = await screen.findByLabelText('名称')
+    
+    // Type name longer than 50 characters
+    await user.type(nameInput, 'a'.repeat(51))
 
-      const submitButton = screen.getByRole('button', { name: '立即创建' })
-      fireEvent.click(submitButton)
-    })
+    const submitButton = screen.getByRole('button', { name: '立即创建' })
+    await user.click(submitButton)
 
     await waitFor(() => {
       expect(screen.getByText('名称不能超过50个字符')).toBeInTheDocument()

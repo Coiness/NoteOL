@@ -8,10 +8,11 @@ export function useMediaQuery(query: string) {
     if (media.matches !== matches) {
       setMatches(media.matches)
     }
-    const listener = () => setMatches(media.matches)
-    window.addEventListener("resize", listener)
-    return () => window.removeEventListener("resize", listener)
-  }, [matches, query])
+    const listener = (e: MediaQueryListEvent) => setMatches(e.matches)
+    media.addEventListener("change", listener)
+    console.log("添加媒体查询监听事件")
+    return () => media.removeEventListener("change", listener)
+  }, [query])
 
   return matches
 }

@@ -4,6 +4,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { Repository } from "@/types"
+import { useStore } from "@/store/useStore"
+import { useEffect } from "react"
 
 import { cn } from "@/lib/utils"
 import {
@@ -32,6 +34,14 @@ export function MainNav({
   })
 
   const defaultRepo = repositories?.find(r => r.isDefault)
+  const setDefaultRepositoryId = useStore(state => state.setDefaultRepositoryId)
+
+  useEffect(() => {
+    if (defaultRepo) {
+      setDefaultRepositoryId(defaultRepo.id)
+      console.log("设置默认知识库")
+    }
+  }, [defaultRepo, setDefaultRepositoryId])
 
   return (
     <NavigationMenu className={className} {...props}>

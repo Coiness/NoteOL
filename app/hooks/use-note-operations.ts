@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useOffline } from "@/app/hooks/use-offline"
+import { useStore } from "@/store/useStore"
 
 interface UseNoteOperationsProps {
   repositoryId?: string
@@ -12,6 +13,7 @@ interface UseNoteOperationsProps {
 export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const defaultRepositoryId = useStore(state => state.defaultRepositoryId)
 
   // 离线功能
   const { isOnline, createOfflineNote } = useOffline()
@@ -49,7 +51,7 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
       }
 
       // 获取实际要跳转的 repositoryId
-      let targetRepositoryId = repositoryId
+      let targetRepositoryId = repositoryId || defaultRepositoryId
       if (!targetRepositoryId) {
         // 如果没有指定 repositoryId，需要获取默认知识库的ID
         try {
@@ -78,14 +80,15 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
         if (targetRepositoryId) {
           router.push(`/repositories/${targetRepositoryId}?noteId=${data.data.id}`)
         } else {
-          router.push(`/notes/${data.data.id}`)
+          // 如果实在找不到知识库ID，跳转到知识库列表页
+          router.push(`/repositories?noteId=${data.data.id}`)
         }
       } else {
         // 在线创建的笔记，使用服务器ID
         if (targetRepositoryId) {
           router.push(`/repositories/${targetRepositoryId}?noteId=${data.data.id}`)
         } else {
-          router.push(`/notes/${data.data.id}`)
+          router.push(`/repositories?noteId=${data.data.id}`)
         }
       }
     },

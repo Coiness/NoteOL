@@ -307,9 +307,8 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
         }
       } catch (e) {
         console.error('[DEBUG] Failed to update cache after saveMutation', e)
-        // fallback: 保持原有的刷新行为
-        queryClient.invalidateQueries({ queryKey: ["note", noteId] })
-        queryClient.invalidateQueries({ queryKey: ["notes"] })
+        // 避免在此处 invalidateQueries，因为它会导致 "Maximum update depth exceeded" 循环
+        // 如果手动更新缓存失败，下一次重新聚焦或重新加载时会自动获取最新数据
       }
     },
     onError: () => {
@@ -383,7 +382,8 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
       if (onDeleteSuccess) {
         onDeleteSuccess()
       } else {
-        router.push(isRemoveMode ? `/repositories/${repositoryId}` : "/notes")
+        console.log("删除笔记后，跳转到知识库列表页")
+        router.push(repositoryId ? `/repositories/${repositoryId}` : "/repositories")
       }
     },
   })

@@ -34,30 +34,27 @@ interface NoteListProps {
 const NoteItem = memo(({ 
   note, 
   repositoryId, 
+  defaultRepositoryId,
+  previewContent,
   currentNoteId, 
   onSettingsClick 
 }: { 
   note: Note & { isOffline?: boolean }
   repositoryId?: string
+  defaultRepositoryId: string | null
+  previewContent?: string
   currentNoteId?: string | null
   onSettingsClick: (e: React.MouseEvent) => void
 }) => {
-  const href = repositoryId ? `/repositories/${repositoryId}?noteId=${note.id}` : `/notes/${note.id}`
-  
-  // 订阅实时内容更新
   // 优先级：
-  // 1. 当前选中且正在编辑的内容 (activeNoteContent)
-  // 2. 之前编辑过缓存的内容 (notePreviews)
-  // 3. 数据库里的原始内容 (note.content)
-  const displayContent = useStore(state => {
-    if (state.activeNoteId === note.id && state.activeNoteContent !== null) {
-      return state.activeNoteContent.slice(0, 30)
-    }
-    if (state.notePreviews[note.id]) {
-      return state.notePreviews[note.id].slice(0, 30)
-    }
-    return stripHtml(note.content || "").slice(0, 30) || "无内容"
-  })
+  // 1. 传入的实时预览内容 (previewContent)
+  // 2. 数据库里的原始内容 (note.content)
+  
+  const displayContent = previewContent ?? (stripHtml(note.content || "").slice(0, 30) || "无内容")
+
+  const href = repositoryId 
+    ? `/repositories/${repositoryId}?noteId=${note.id}` 
+    : (defaultRepositoryId ? `/repositories/${defaultRepositoryId}?noteId=${note.id}` : `/repositories?noteId=${note.id}`)
 
   return (
     <Link
@@ -110,11 +107,22 @@ NoteItem.displayName = "NoteItem"
 // 虚拟化列表项渲染组件
 const VirtualizedNoteItem = ({ index, style, data }: { index: number; style: React.CSSProperties; data: any }) => {
   const note = data.notes[index]
+  
+  // 计算预览内容
+  let previewContent: string | undefined
+  if (data.activeNoteId === note.id && data.activeNoteContent !== null) {
+    previewContent = data.activeNoteContent.slice(0, 30)
+  } else if (data.notePreviews[note.id]) {
+    previewContent = data.notePreviews[note.id].slice(0, 30)
+  }
+
   return (
     <div style={style}>
       <NoteItem
         note={note}
         repositoryId={data.repositoryId}
+        defaultRepositoryId={data.defaultRepositoryId}
+        previewContent={previewContent}
         currentNoteId={data.currentNoteId}
         onSettingsClick={data.onSettingsClick}
       />
@@ -130,7 +138,11 @@ export function NoteList({ repositoryId }: NoteListProps) {
   const [sortOrder, setSortOrder] = useState<"updated_desc" | "updated_asc" | "created_desc" | "created_asc" | "title_asc" | "title_desc">("updated_desc")
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
 
-  // 使用分离的 hooks
+  // 从 Store 获取全局状态
+  const defaultRepositoryId = useStore(state => state.defaultRepositoryId)
+  const activeNoteId = useStore(state => state.activeNoteId)
+  const activeNoteContent = useStore(state => state.activeNoteContent)
+  const notePreviews = useStore(state => state.notePreviews)
   const { allNotes, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useNoteList({
     repositoryId,
     searchQuery: debouncedSearchQuery,
@@ -318,15 +330,27 @@ export function NoteList({ repositoryId }: NoteListProps) {
           </div>
         ) : (
           <div className="flex flex-col">
-            {allNotes.map((note) => (
-              <NoteItem
-                key={note.id}
-                note={note}
-                repositoryId={repositoryId}
-                currentNoteId={currentNoteId}
-                onSettingsClick={(e) => e.preventDefault()}
-              />
-            ))}
+            {allNotes.map((note) => {
+              // 计算预览内容
+              let previewContent: string | undefined
+              if (activeNoteId === note.id && activeNoteContent !== null) {
+                previewContent = activeNoteContent.slice(0, 30)
+              } else if (notePreviews[note.id]) {
+                previewContent = notePreviews[note.id].slice(0, 30)
+              }
+
+              return (
+                <NoteItem
+                  key={note.id}
+                  note={note}
+                  repositoryId={repositoryId}
+                  defaultRepositoryId={defaultRepositoryId}
+                  previewContent={previewContent}
+                  currentNoteId={currentNoteId}
+                  onSettingsClick={(e) => e.preventDefault()}
+                />
+              )
+            })}
           </div>
         )}
       </div>
