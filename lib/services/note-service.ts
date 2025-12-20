@@ -19,6 +19,7 @@ import { Doc } from 'yjs'
 import { Note } from "@/types/note"
 import { NoteIndexEntry } from "@/types/offline"
 import { offlineManager } from "@/lib/offline-manager"
+import { syncQueueManager } from "@/lib/sync-queue-manager"
 
 // 查询数据时可以传入的参数
 export interface GetNotesOptions {
@@ -186,7 +187,7 @@ export class NoteService implements INoteService {
     persistence.destroy()
     doc.destroy()
     
-    // 4.4 如果在线，同步到服务器 (简单 API 同步，未来将被 SyncQueue 替代)
+    // 4.4 如果在线，同步到服务器 (SyncQueue)
     if (navigator.onLine && !id.startsWith('local_')) {
       try {
         const requestId = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `${Date.now()}`
@@ -196,9 +197,20 @@ export class NoteService implements INoteService {
             body: JSON.stringify(note),
         })
       } catch (e) {
-        console.error('Failed to sync update to server:', e)
-        // TODO: Enqueue for later
+        console.error('Failed to sync update to server, enqueueing:', e)
+        await syncQueueManager.enqueue({
+          type: 'UPDATE',
+          noteId: id,
+          payload: note
+        })
       }
+    } else {
+      // 离线状态：直接入队
+      await syncQueueManager.enqueue({
+        type: 'UPDATE',
+        noteId: id,
+        payload: note
+      })
     }
     
     // 4.5 返回最新索引
@@ -223,10 +235,18 @@ export class NoteService implements INoteService {
         req.onerror = () => console.error('Failed to delete Y.js DB for', id)
     }
 
-    // 7.3 如果在线，删除服务器数据
+    // 7.3 如果在线，删除服务器数据 (SyncQueue)
     if (navigator.onLine && !id.startsWith('local_')) {
-        const res = await fetch(`/api/notes/${id}`, { method: "DELETE" })
-        if (!res.ok) throw new Error("Failed to delete note on server")
+        try {
+            const res = await fetch(`/api/notes/${id}`, { method: "DELETE" })
+            if (!res.ok) throw new Error("Failed to delete note on server")
+        } catch (e) {
+            console.error('Failed to sync delete to server, enqueueing:', e)
+            await syncQueueManager.enqueue({ type: 'DELETE', noteId: id })
+        }
+    } else {
+        // 离线状态：直接入队
+        await syncQueueManager.enqueue({ type: 'DELETE', noteId: id })
     }
   }
 

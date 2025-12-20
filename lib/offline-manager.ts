@@ -17,7 +17,7 @@ import { NoteIndexEntry } from '@/types/offline'
 
 // IndexedDB 数据库名称和版本
 const DB_NAME = 'noteol_offline'
-const DB_VERSION = 2
+const DB_VERSION = 3 // Bump version for sync_queue
 
 export class OfflineManager {
   private db: IDBDatabase | null = null
@@ -49,13 +49,20 @@ export class OfflineManager {
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result
         
-        // 创建新的笔记索引存储 (New Architecture)
-        // Q:我的笔记默认是会放入一个默认知识库的，笔记是存在一个多对多的关系，一个笔记可以有多个知识库
+        // 创建新的笔记索引存储
         if (!db.objectStoreNames.contains('notes_index')) {
           const indexStore = db.createObjectStore('notes_index', { keyPath: 'id' })
           indexStore.createIndex('repositoryId', 'repositoryId', { unique: false })
           indexStore.createIndex('updatedAt', 'updatedAt', { unique: false })
           indexStore.createIndex('title', 'title', { unique: false })
+        }
+
+        // 创建同步队列存储 (Sync Queue)
+        if (!db.objectStoreNames.contains('sync_queue')) {
+          const queueStore = db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true })
+          queueStore.createIndex('createdAt', 'createdAt', { unique: false })
+          // 我们可以为每个笔记维护一个队列，也可以用全局队列
+          // 这里使用全局队列，按时间顺序处理
         }
       }
     })
