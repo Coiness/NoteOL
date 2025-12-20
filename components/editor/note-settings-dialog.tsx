@@ -24,6 +24,7 @@ import { MemberManagement } from "@/components/note/settings/member-management"
 import { toast } from "sonner"
 import { Note, Repository, Collaborator, NoteRepository } from "@/types"
 import { Trash2, Settings } from "lucide-react"
+import { noteService } from "@/lib/services/note-service"
 
 interface NoteSettingsDialogProps {
   note: Note
@@ -91,17 +92,15 @@ export function NoteSettingsDialog({ note, trigger, onDelete }: NoteSettingsDial
       toast.success("已从知识库移除")
     },
     onError: (error: Error) => {
-        toast.error(error.message)
+      toast.error(error.message)
     }
   })
 
   // 删除笔记 Mutation
   const deleteNoteMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/notes/${note.id}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) throw new Error("Failed to delete note")
+      // 使用 NoteService 统一处理删除
+      await noteService.deleteNote(note.id)
     },
     onSuccess: () => {
       // 尽量只刷新与该笔记所在知识库相关的 notes 查询

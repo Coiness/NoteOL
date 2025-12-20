@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useDebounce } from "@/app/hooks/use-debounce"
 import { useOffline } from "@/app/hooks/use-offline"
+import { noteService } from "@/lib/services/note-service"
 import { offlineManager } from "@/lib/offline-manager"
-import { Note } from "@/types"
+import { Note, Tag } from "@/types"
 import * as Y from "yjs"
 import { HocuspocusProvider } from "@hocuspocus/provider"
 import { IndexeddbPersistence } from "y-indexeddb"
@@ -66,7 +67,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
           content: offlineNote.preview || '',
           createdAt: offlineNote.createdAt.toISOString(),
           updatedAt: offlineNote.updatedAt.toISOString(),
-          tags: offlineNote.tags.map(tag => ({
+          tags: offlineNote.tags.map((tag: string) => ({
             id: tag,
             name: tag,
             userId: "",
@@ -248,71 +249,50 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
               yTitle.insert(0, newTitle)
           })
 
-          // 如果是离线笔记，同时更新 IndexedDB 中的元数据
+          // 使用 NoteService 处理元数据更新
+          // 离线模式下，立即更新索引以刷新列表
           if (isOfflineNote) {
-            offlineManager.updateNoteIndex(yDoc).then(() => {
-              // 立即触发离线笔记列表刷新
-              triggerGlobalRefresh()
-            }).catch(error => {
-              console.error('Failed to update offline note title:', error)
-            })
+             noteService.updateNote(noteId, { title: newTitle }).catch(console.error)
+             triggerGlobalRefresh()
           }
       }
   }
 
-  // 保存笔记 Mutation (支持离线保存)
+  // 保存笔记 Mutation (统一调用 NoteService)
   const saveMutation = useMutation({
     mutationFn: async (data: { title?: string; tags?: string[] }) => {
-      if (isOfflineNote) {
-        // 离线笔记：更新 IndexedDB 中的笔记
-        // Note: Y.js 已经自动保存了，这里主要是确保 index 更新
-        await offlineManager.updateNoteIndex(yDoc)
-        return { success: true }
-      } else {
-        // 在线笔记：调用服务器API
-        // 生成请求ID并发送到服务器，用于追踪重复请求
-        const requestId = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2,10)}`
-        const res = await fetch(`/api/notes/${noteId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
-          body: JSON.stringify(data),
+      // 无论在线离线，统一走 NoteService
+      // NoteService.updateNote 会处理 Y.js, Index 更新和 Server Sync
+      
+      // 构造 Partial<Note>，将 tags string[] 转换为 Tag[] 格式以匹配接口
+      const updatePayload: Partial<Note> = {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.tags !== undefined && { 
+            tags: data.tags.map(t => ({ id: t, name: t, userId: '', createdAt: new Date().toISOString() })) 
         })
-        if (!res.ok) throw new Error("Failed to save note")
-        return res.json()
       }
+      
+      return noteService.updateNote(noteId, updatePayload)
     },
-    onSuccess: (res: any) => {
-      // 使用更细粒度的缓存更新，避免重复触发全量刷新
-      try {
-        if (isOfflineNote) {
-
-          // 离线笔记：触发列表刷新 (解决左侧列表不更新问题)
-          triggerGlobalRefresh()
-          // 更新当前笔记缓存
-          queryClient.setQueryData(["note", noteId], (old: any) => ({ ...(old || {}), ...(res?.data || {}) }))
-        } else {
-          const updated = res?.data || res
-          // 更新单个笔记缓存
-          queryClient.setQueryData(["note", noteId], (old: any) => ({ ...(old || {}), ...(updated || {}) }))
-
-          // 更新所有 notes 查询中的该笔记条目，避免 invalidate 全量刷新
-          const notesQueries = queryClient.getQueryCache().findAll({ predicate: (query: Query) => Array.isArray(query.queryKey) && query.queryKey[0] === "notes" })
-          notesQueries.forEach(q => {
-            queryClient.setQueryData(q.queryKey, (old: any) => {
-              if (!old || !old.pages) return old
-              const pages = old.pages.map((page: any) => ({
-                ...page,
-                notes: page.notes.map((n: any) => n.id === (updated as any).id ? { ...n, ...(updated as any) } : n)
-              }))
-              return { ...old, pages }
-            })
-          })
-        }
-      } catch (e) {
-        console.error('[DEBUG] Failed to update cache after saveMutation', e)
-        // 避免在此处 invalidateQueries，因为它会导致 "Maximum update depth exceeded" 循环
-        // 如果手动更新缓存失败，下一次重新聚焦或重新加载时会自动获取最新数据
-      }
+    onSuccess: (updatedNote) => {
+      // 触发列表刷新
+      triggerGlobalRefresh()
+      
+      // 更新当前笔记缓存
+      queryClient.setQueryData(["note", noteId], (old: any) => ({ ...(old || {}), ...updatedNote }))
+      
+      // 更新所有 notes 查询中的该笔记条目
+      const notesQueries = queryClient.getQueryCache().findAll({ predicate: (query: Query) => Array.isArray(query.queryKey) && query.queryKey[0] === "notes" })
+      notesQueries.forEach(q => {
+        queryClient.setQueryData(q.queryKey, (old: any) => {
+          if (!old || !old.pages) return old
+          const pages = old.pages.map((page: any) => ({
+            ...page,
+            notes: page.notes.map((n: any) => n.id === updatedNote.id ? { ...n, ...updatedNote } : n)
+          }))
+          return { ...old, pages }
+        })
+      })
     },
     onError: () => {
       toast.error(isOfflineNote ? "离线保存失败" : "保存失败，请检查网络")
@@ -360,17 +340,14 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (isRemoveMode) {
-          // Remove from repository
+          // Remove from repository (Still API based for now as it's a relation change)
           const res = await fetch(`/api/repositories/${repositoryId}/notes/${noteId}`, {
             method: "DELETE",
           })
           if (!res.ok) throw new Error("Failed to remove note from repository")
       } else {
-          // Delete note permanently
-          const res = await fetch(`/api/notes/${noteId}`, {
-            method: "DELETE",
-          })
-          if (!res.ok) throw new Error("Failed to delete note")
+          // Delete note permanently (Unified Service)
+          await noteService.deleteNote(noteId)
       }
     },
     onSuccess: () => {

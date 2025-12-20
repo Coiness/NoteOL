@@ -142,6 +142,18 @@ export class OfflineManager {
     })
   }
 
+  // 删除单个笔记索引
+  async deleteNoteIndex(id: string): Promise<void> {
+    if (!this.db) await this.initDB()
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['notes_index'], 'readwrite')
+      const store = transaction.objectStore('notes_index')
+      const request = store.delete(id)
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
   // 获取所有笔记索引
   async getNoteIndices(): Promise<NoteIndexEntry[]> {
     if (!this.db) await this.initDB()

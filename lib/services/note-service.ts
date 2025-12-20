@@ -168,27 +168,66 @@ export class NoteService implements INoteService {
   async updateNote(id: string, note: Partial<Note>): Promise<Note> {
     if (typeof window === 'undefined') throw new Error('updateNote only on client')
     
+    // 4.1 更新本地 Y.js 元数据 (Source of Truth)
     const { IndexeddbPersistence } = await import('y-indexeddb')
     const doc = new Doc({ guid: id })
     const persistence = new IndexeddbPersistence(id, doc)
     await persistence.whenSynced
     
-    // === 关键点：更新 Y.js 中的元数据 ===
     const metadata = doc.getMap('metadata')
     if (note.title !== undefined) metadata.set('title', note.title)
     if (note.tags !== undefined) metadata.set('tags', note.tags.map(t => t.name))
     metadata.set('updatedAt', new Date().toISOString())
-    // ===================================
     
+    // 4.2 总是更新本地索引 (确保列表即时更新)
     await offlineManager.updateNoteIndex(doc)
     
+    // 4.3 清理 Y.js 资源
     persistence.destroy()
     doc.destroy()
     
+    // 4.4 如果在线，同步到服务器 (简单 API 同步，未来将被 SyncQueue 替代)
+    if (navigator.onLine && !id.startsWith('local_')) {
+      try {
+        const requestId = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `${Date.now()}`
+        await fetch(`/api/notes/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
+            body: JSON.stringify(note),
+        })
+      } catch (e) {
+        console.error('Failed to sync update to server:', e)
+        // TODO: Enqueue for later
+      }
+    }
+    
+    // 4.5 返回最新索引
     const entry = await offlineManager.getNoteIndex(id)
     if (!entry) throw new Error('Note not found after update')
-      
     return this.convertIndexEntryToNote(entry)
+  }
+
+  // 7. 删除笔记
+  async deleteNote(id: string): Promise<void> {
+    // 7.1 删除本地索引
+    await offlineManager.deleteNoteIndex(id)
+    
+    // 7.2 删除本地 Y.js 数据
+    if (typeof window !== 'undefined') {
+        // y-indexeddb creates databases named like the document guid
+        const req = indexedDB.deleteDatabase(id)
+        // Also need to delete the persistence metadata usually stored in 'yjs' db or similar?
+        // Actually y-indexeddb uses the room name/guid as the DB name by default in our setup?
+        // Let's check how we initialized it: new IndexeddbPersistence(id, doc)
+        // Yes, the first arg is the name.
+        req.onerror = () => console.error('Failed to delete Y.js DB for', id)
+    }
+
+    // 7.3 如果在线，删除服务器数据
+    if (navigator.onLine && !id.startsWith('local_')) {
+        const res = await fetch(`/api/notes/${id}`, { method: "DELETE" })
+        if (!res.ok) throw new Error("Failed to delete note on server")
+    }
   }
 
   // 5. 同步待处理操作 (Legacy support, maybe deprecated in pure Y.js mode but kept for safety)
