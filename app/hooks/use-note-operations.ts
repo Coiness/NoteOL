@@ -97,6 +97,7 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
 
   return {
     createNote: createMutation.mutate,
-    isCreating: createMutation.isPending
+    isCreating: createMutation.isPending,
+    isOnline
   }
 }

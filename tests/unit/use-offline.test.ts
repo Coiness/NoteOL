@@ -61,18 +61,13 @@ describe('useOffline Hook', () => {
     const { result } = renderHook(() => useOffline(), { wrapper: Wrapper })
 
     expect(result.current.isOnline).toBe(true) // 在测试环境中navigator.onLine为true
-    expect(result.current.pendingNotesCount).toBe(0)
-    expect(typeof result.current.createOfflineNote).toBe('function')
-    expect(typeof result.current.getOfflineNotes).toBe('function')
   })
 
   it('should have all required methods', () => {
     const { result } = renderHook(() => useOffline(), { wrapper: Wrapper })
 
     expect(result.current).toHaveProperty('isOnline')
-    expect(result.current).toHaveProperty('pendingNotesCount')
-    expect(result.current).toHaveProperty('createOfflineNote')
-    expect(result.current).toHaveProperty('getOfflineNotes')
-    expect(result.current).toHaveProperty('syncPendingOperations')
+    expect(result.current).toHaveProperty('setGlobalRefreshCallback')
+    expect(result.current).toHaveProperty('triggerGlobalRefresh')
   })
 })

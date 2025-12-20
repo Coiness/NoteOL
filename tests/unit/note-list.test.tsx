@@ -23,15 +23,20 @@ vi.mock('sonner', () => ({
   }
 }))
 
-// Mock useOffline hook
-vi.mock('@/hooks/use-offline', () => ({
-  useOffline: () => ({
-    isOnline: true,
-    pendingNotesCount: 0,
-    createOfflineNote: vi.fn(),
-    getOfflineNotes: vi.fn(() => []),
-    syncPendingOperations: vi.fn()
+// Mock useNoteOperations
+vi.mock('@/app/hooks/use-note-operations', () => ({
+  useNoteOperations: () => ({
+    createNote: vi.fn(),
+    isCreating: false,
+    isOnline: true
   })
+}))
+
+// Mock NoteService
+vi.mock('@/lib/services/note-service', () => ({
+  noteService: {
+    getNotes: vi.fn().mockResolvedValue([])
+  }
 }))
 
 // Mock IntersectionObserver

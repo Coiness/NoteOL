@@ -143,13 +143,13 @@ export function NoteList({ repositoryId }: NoteListProps) {
   const activeNoteId = useStore(state => state.activeNoteId)
   const activeNoteContent = useStore(state => state.activeNoteContent)
   const notePreviews = useStore(state => state.notePreviews)
-  const { allNotes, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useNoteList({
+  const { notes: allNotes, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useNoteList({
     repositoryId,
     searchQuery: debouncedSearchQuery,
     sortOrder
   })
 
-  const { createMutation, isOnline } = useNoteOperations({ repositoryId })
+  const { createNote, isCreating, isOnline } = useNoteOperations({ repositoryId })
 
   // 获取当前排序的显示文本
   const getCurrentSortLabel = () => {
@@ -260,10 +260,10 @@ export function NoteList({ repositoryId }: NoteListProps) {
                     <Button 
                         size="icon" 
                         variant="ghost" 
-                        disabled={createMutation.isPending}
+                        disabled={isCreating}
                         className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     >
-                    {createMutation.isPending ? (
+                    {isCreating ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                         <Plus className="h-4 w-4" />
@@ -271,7 +271,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => createMutation.mutate()}>
+                    <DropdownMenuItem onClick={() => createNote()}>
                       <Plus className="mr-2 h-4 w-4" />
                       新建笔记
                     </DropdownMenuItem>
@@ -285,11 +285,11 @@ export function NoteList({ repositoryId }: NoteListProps) {
                 <Button 
                     size="icon" 
                     variant="ghost" 
-                    onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending}
+                    onClick={() => createNote()}
+                    disabled={isCreating}
                     className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 >
-                {createMutation.isPending ? (
+                {isCreating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                     <Plus className="h-4 w-4" />
@@ -321,7 +321,7 @@ export function NoteList({ repositoryId }: NoteListProps) {
             {!searchQuery && (
                 <Button 
                     variant="link" 
-                    onClick={() => createMutation.mutate()}
+                    onClick={() => createNote()}
                     className="mt-2"
                 >
                     创建第一篇笔记

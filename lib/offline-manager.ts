@@ -1,9 +1,23 @@
-import { OfflineNote, OfflineOperation, SyncResult } from '@/types/offline'
-import { toast } from 'sonner'
+/**
+ * OfflineManager: 本地存储与索引管理器
+ * 
+ * 核心职责:
+ * 1. 管理 IndexedDB 数据库 (noteol_offline)
+ * 2. 维护轻量级笔记索引 (notes_index)，用于快速列表渲染和搜索
+ * 3. 提供本地全文搜索能力 (基于内存过滤)
+ * 4. 从 Y.Doc 中提取元数据并更新索引
+ * 
+ * 注意:
+ * - 本类不再负责 "离线操作队列" (已废弃)，因为数据同步已移交给 Y.js
+ * - 真正的 Y.js 二进制数据由 y-indexeddb 库直接管理，不经过此类
+ */
+
+import { Doc } from 'yjs'
+import { NoteIndexEntry } from '@/types/offline'
 
 // IndexedDB 数据库名称和版本
 const DB_NAME = 'noteol_offline'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 export class OfflineManager {
   private db: IDBDatabase | null = null
@@ -34,19 +48,14 @@ export class OfflineManager {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result
-
-        // 创建离线笔记存储
-        if (!db.objectStoreNames.contains('offline_notes')) {
-          const notesStore = db.createObjectStore('offline_notes', { keyPath: 'id' })
-          notesStore.createIndex('status', 'status', { unique: false })
-          notesStore.createIndex('repositoryId', 'repositoryId', { unique: false })
-        }
-
-        // 创建离线操作存储
-        if (!db.objectStoreNames.contains('offline_operations')) {
-          const operationsStore = db.createObjectStore('offline_operations', { keyPath: 'id' })
-          operationsStore.createIndex('status', 'status', { unique: false })
-          operationsStore.createIndex('type', 'type', { unique: false })
+        
+        // 创建新的笔记索引存储 (New Architecture)
+        // Q:我的笔记默认是会放入一个默认知识库的，笔记是存在一个多对多的关系，一个笔记可以有多个知识库
+        if (!db.objectStoreNames.contains('notes_index')) {
+          const indexStore = db.createObjectStore('notes_index', { keyPath: 'id' })
+          indexStore.createIndex('repositoryId', 'repositoryId', { unique: false })
+          indexStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+          indexStore.createIndex('title', 'title', { unique: false })
         }
       }
     })
@@ -57,7 +66,6 @@ export class OfflineManager {
 
     window.addEventListener('online', () => {
       this.isOnline = true
-      this.syncPendingOperations()
     })
 
     window.addEventListener('offline', () => {
@@ -70,190 +78,93 @@ export class OfflineManager {
     return `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }
 
-  // 离线创建笔记
-  async createOfflineNote(data: {
-    title: string
-    content?: string
-    tags?: string[]
-    repositoryId?: string
-  }): Promise<OfflineNote> {
-    const note: OfflineNote = {
-      id: this.generateLocalNoteId(),
-      title: data.title,
-      content: data.content || '',
-      tags: data.tags || [],
-      repositoryId: data.repositoryId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+  // 更新笔记索引 (New Architecture)
+  async updateNoteIndex(doc: Doc): Promise<void> {
+    if (!this.db) await this.initDB()
+
+    const metadata = doc.getMap('metadata')
+    const id = (metadata.get('id') as string) || doc.guid
+    if (!id) return
+
+    // 简单提取文本预览
+    let preview = ''
+    try {
+      const fragment = doc.getXmlFragment('default')
+      const xmlString = fragment.toString()
+      // Strip HTML tags using regex
+      preview = xmlString.replace(/<[^>]+>/g, ' ').slice(0, 200).trim()
+    } catch (e) {
+      // Ignore
+    }
+
+    const entry: NoteIndexEntry = {
+      id,
+      title: (metadata.get('title') as string) || '无标题',
+      tags: (metadata.get('tags') as string[]) || [],
+      repositoryId: metadata.get('repositoryId') as string,
+      createdAt: new Date((metadata.get('createdAt') as string) || Date.now()),
+      updatedAt: new Date((metadata.get('updatedAt') as string) || Date.now()),
+      preview,
       status: 'pending'
     }
 
-    await this.saveOfflineNote(note)
-    return note
-  }
-
-  // 保存离线笔记到IndexedDB
-  async saveOfflineNote(note: OfflineNote): Promise<void> {
-    if (!this.db) await this.initDB()
-
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offline_notes'], 'readwrite')
-      const store = transaction.objectStore('offline_notes')
-      const request = store.put(note)
+      const transaction = this.db!.transaction(['notes_index'], 'readwrite')
+      const store = transaction.objectStore('notes_index')
+      const request = store.put(entry)
 
       request.onsuccess = () => resolve()
       request.onerror = () => reject(request.error)
     })
   }
 
-  // 获取所有离线笔记
-  async getOfflineNotes(): Promise<OfflineNote[]> {
+  // 直接保存索引条目
+  async saveNoteIndex(entry: NoteIndexEntry): Promise<void> {
     if (!this.db) await this.initDB()
-
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offline_notes'], 'readonly')
-      const store = transaction.objectStore('offline_notes')
-      const request = store.getAll()
-
-      request.onsuccess = () => resolve(request.result)
+      const transaction = this.db!.transaction(['notes_index'], 'readwrite')
+      const store = transaction.objectStore('notes_index')
+      const request = store.put(entry)
+      request.onsuccess = () => resolve()
       request.onerror = () => reject(request.error)
     })
   }
 
-  // 获取待同步的笔记
-  async getPendingNotes(): Promise<OfflineNote[]> {
-    const allNotes = await this.getOfflineNotes()
-    return allNotes.filter(note => note.status === 'pending')
-  }
-
-  // 更新笔记状态
-  async updateNoteStatus(noteId: string, status: OfflineNote['status'], serverId?: string): Promise<void> {
+  // 获取单个笔记索引
+  async getNoteIndex(id: string): Promise<NoteIndexEntry | null> {
     if (!this.db) await this.initDB()
-
-    const note = await this.getOfflineNote(noteId)
-    if (note) {
-      note.status = status
-      if (serverId) note.serverId = serverId
-      note.updatedAt = new Date()
-      await this.saveOfflineNote(note)
-    }
-  }
-
-  // 获取单个离线笔记
-  async getOfflineNote(noteId: string): Promise<OfflineNote | null> {
-    if (!this.db) await this.initDB()
-
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offline_notes'], 'readonly')
-      const store = transaction.objectStore('offline_notes')
-      const request = store.get(noteId)
-
+      const transaction = this.db!.transaction(['notes_index'], 'readonly')
+      const store = transaction.objectStore('notes_index')
+      const request = store.get(id)
       request.onsuccess = () => resolve(request.result || null)
       request.onerror = () => reject(request.error)
     })
   }
 
-  // 删除离线笔记
-  async deleteOfflineNote(noteId: string): Promise<void> {
+  // 获取所有笔记索引
+  async getNoteIndices(): Promise<NoteIndexEntry[]> {
     if (!this.db) await this.initDB()
-
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offline_notes'], 'readwrite')
-      const store = transaction.objectStore('offline_notes')
-      const request = store.delete(noteId)
-
-      request.onsuccess = () => resolve()
+      const transaction = this.db!.transaction(['notes_index'], 'readonly')
+      const store = transaction.objectStore('notes_index')
+      const request = store.getAll()
+      request.onsuccess = () => resolve(request.result || [])
       request.onerror = () => reject(request.error)
     })
   }
 
-  // 更新离线笔记
-  async updateOfflineNote(noteId: string, updates: Partial<OfflineNote>): Promise<void> {
-    if (!this.db) await this.initDB()
-
-    const note = await this.getOfflineNote(noteId)
-    if (note) {
-      const updatedNote = { ...note, ...updates, updatedAt: new Date() }
-      await this.saveOfflineNote(updatedNote)
-    }
-  }
-
-  // 同步待处理的笔记到服务器
-  async syncPendingNotes(): Promise<SyncResult[]> {
-    if (!this.isOnline) return []
-
-    const pendingNotes = await this.getPendingNotes()
-    const results: SyncResult[] = []
-
-    for (const note of pendingNotes) {
-      try {
-        await this.updateNoteStatus(note.id, 'syncing')
-
-        // 调用服务器API创建笔记
-        const response = await fetch('/api/notes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: note.title,
-            content: note.content,
-            tags: note.tags,
-            repositoryId: note.repositoryId
-          })
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-
-        const result = await response.json()
-        const serverId = result.data.id
-
-        // 更新状态为已同步
-        await this.updateNoteStatus(note.id, 'synced', serverId)
-
-        results.push({
-          success: true,
-          operationId: note.id,
-          serverId
-        })
-
-      } catch (error) {
-        console.error(`Failed to sync note ${note.id}:`, error)
-        await this.updateNoteStatus(note.id, 'failed')
-
-        results.push({
-          success: false,
-          operationId: note.id,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    }
-
-    return results
-  }
-
-  // 同步所有待处理的离线操作
-  async syncPendingOperations(): Promise<void> {
-    if (!this.isOnline) return
-
-    try {
-      const results = await this.syncPendingNotes()
-
-      const successCount = results.filter(r => r.success).length
-      const failCount = results.filter(r => !r.success).length
-
-      if (successCount > 0) {
-        toast.success(`已同步 ${successCount} 篇离线创建的笔记`)
-      }
-
-      if (failCount > 0) {
-        toast.error(`${failCount} 篇笔记同步失败，请稍后重试`)
-      }
-
-    } catch (error) {
-      console.error('Failed to sync offline operations:', error)
-      toast.error('离线同步失败')
-    }
+  // 搜索笔记 (本地全文搜索)
+  async searchNotes(query: string): Promise<NoteIndexEntry[]> {
+    const all = await this.getNoteIndices()
+    if (!query) return all
+    
+    const lowerQuery = query.toLowerCase()
+    return all.filter(note => 
+      note.title.toLowerCase().includes(lowerQuery) || 
+      note.preview.toLowerCase().includes(lowerQuery) ||
+      note.tags.some(t => t.toLowerCase().includes(lowerQuery))
+    )
   }
 
   // 检查是否在线
@@ -263,6 +174,3 @@ export class OfflineManager {
 }
 
 export const offlineManager = new OfflineManager()
-
-
-// Q：同步笔记能不能单独放一个地方，就不用遍历filter了

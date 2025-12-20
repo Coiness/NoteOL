@@ -1,5 +1,23 @@
+/**
+ * NoteService: 统一数据服务层 (Local-First Architecture)
+ * 
+ * 核心职责:
+ * 1. 作为 UI 与底层数据源 (IndexedDB / Y.js / API) 之间的中间件
+ * 2. 实现了 "离线优先" 策略：所有读取/写入优先操作本地 IndexedDB
+ * 3. 管理 Y.js 文档的生命周期：创建、元数据写入、持久化
+ * 4. 维护本地搜索索引 (notes_index) 与 Y.js 数据的一致性
+ * 5. 提供元数据快照同步 (Initial Sync) 功能，解决新设备登录无数据问题
+ * 
+ * 主要方法:
+ * - getNotes: 从本地索引读取列表，支持极速分页/过滤/排序
+ * - createNote: 初始化 Y.Doc，写入 Title/Tags 元数据，持久化到 y-indexeddb
+ * - updateNote: 更新 Y.Doc 中的元数据，并同步更新本地索引
+ * - syncMetadataSnapshot: 从 API 拉取元数据快照，填充本地索引
+ */
+
+import { Doc } from 'yjs'
 import { Note } from "@/types/note"
-import { OfflineNote, OfflineOperation } from "@/types/offline"
+import { NoteIndexEntry } from "@/types/offline"
 import { offlineManager } from "@/lib/offline-manager"
 
 // 查询数据时可以传入的参数
@@ -12,39 +30,38 @@ export interface GetNotesOptions {
   limit?: number
 }
 
-// 笔记服务接口，也就是提供的服务方法
+// 笔记服务接口
 export interface INoteService {
   getNotes(options?: GetNotesOptions): Promise<Note[]>
   getNote(id: string): Promise<Note | null>
   createNote(note: Partial<Note>): Promise<Note>
   updateNote(id: string, note: Partial<Note>): Promise<Note>
   syncPendingOperations(): Promise<void>
-  syncFromApi(options?: GetNotesOptions): Promise<void>
+  syncMetadataSnapshot(options?: GetNotesOptions): Promise<void>
 }
 
-// implements 是实现接口的关键字，这里是实现 INoteService 接口
-// 实现，一个新的类，从父类或者接口实现所有的属性和方法，同时可以重写属性和方法，包含一些新的功能
 export class NoteService implements INoteService {
-  // 转换器，将“数据库存的格式”转换为“UI使用的格式”
-  private convertOfflineNoteToNote(offlineNote: OfflineNote): Note {
+  
+  // 转换索引条目为 Note 格式 (用于 UI 展示)
+  private convertIndexEntryToNote(entry: NoteIndexEntry): Note {
     return {
-      id: offlineNote.id,
-      title: offlineNote.title,
-      content: offlineNote.content,
-      createdAt: offlineNote.createdAt.toISOString(),
-      updatedAt: offlineNote.updatedAt.toISOString(),
-      tags: offlineNote.tags?.map(t => ({ 
+      id: entry.id,
+      title: entry.title,
+      content: entry.preview, // 列表页只需要预览
+      createdAt: entry.createdAt.toISOString(),
+      updatedAt: entry.updatedAt.toISOString(),
+      tags: entry.tags.map(t => ({ 
         id: t, 
         name: t, 
         userId: 'local', 
         createdAt: new Date().toISOString() 
-      })) || [],
-      noteRepositories: offlineNote.repositoryId ? [{
-        repositoryId: offlineNote.repositoryId,
-        noteId: offlineNote.id,
+      })),
+      noteRepositories: entry.repositoryId ? [{
+        repositoryId: entry.repositoryId,
+        noteId: entry.id,
         repository: {
-          id: offlineNote.repositoryId,
-          name: 'Loading...', // Offline placeholder
+          id: entry.repositoryId,
+          name: 'Loading...',
           userId: 'local',
           isDefault: false,
           createdAt: new Date().toISOString(),
@@ -54,31 +71,21 @@ export class NoteService implements INoteService {
     }
   }
 
-  // 获取笔记列表
+  // 1. 获取笔记列表 (从本地索引 notes_index 读取)
   async getNotes(options: GetNotesOptions = {}): Promise<Note[]> {
-    // 1.优先返回本地数据
-    const offlineNotes = await offlineManager.getOfflineNotes()
+    // 1.1 从 IDB 获取所有索引
+    let entries = await offlineManager.searchNotes(options.searchQuery || '')
     
-    // 2. 对本地数据进行过滤和排序
-    let filtered = offlineNotes
-
+    // 1.2 过滤
     if (options.repositoryId) {
-      filtered = filtered.filter(n => n.repositoryId === options.repositoryId)
+      entries = entries.filter(n => n.repositoryId === options.repositoryId)
     }
 
-    if (options.searchQuery) {
-      const query = options.searchQuery.toLowerCase()
-      filtered = filtered.filter(n => 
-        n.title.toLowerCase().includes(query) || 
-        (n.content?.toLowerCase() || '').includes(query)
-      )
-    }
-
-    // Sort
+    // 1.3 排序
     const sortField = options.sort || 'updated'
     const sortOrder = options.order || 'desc'
     
-    filtered.sort((a, b) => {
+    entries.sort((a, b) => {
       let valA: any = a.updatedAt
       let valB: any = b.updatedAt
 
@@ -97,120 +104,142 @@ export class NoteService implements INoteService {
       }
     })
 
-    // 分页（对于本地数据）
-    // 注意：如果本地数据不完整，可能会导致分页结果与服务器不一致
-    // 但是为了“离线优先”的原则，我们会返回本地数据
+    // 1.4 分页
     if (options.page && options.limit) {
       const start = (options.page - 1) * options.limit
-      filtered = filtered.slice(start, start + options.limit)
+      entries = entries.slice(start, start + options.limit)
     }
 
-    // 3. 如果在线，触发后台同步
+    // 1.5 如果在线，触发元数据快照同步 (Lazy Sync)
     if (typeof navigator !== 'undefined' && navigator.onLine) {
-      // 但是为了“离线优先”的原则，我们会返回本地数据
-      this.syncFromApi(options).catch(console.error)
+      this.syncMetadataSnapshot(options).catch(console.error)
     }
-    
-    // 返回经过转换器的 Note 格式
-    return filtered.map(n => this.convertOfflineNoteToNote(n))
+
+    return entries.map(e => this.convertIndexEntryToNote(e))
   }
 
-  // 获取笔记
+  // 2. 获取单个笔记 (从本地索引读取元数据)
   async getNote(id: string): Promise<Note | null> {
-    const offlineNote = await offlineManager.getOfflineNote(id)
-    if (offlineNote) {
-      return this.convertOfflineNoteToNote(offlineNote)
+    const entry = await offlineManager.getNoteIndex(id)
+    if (entry) {
+      return this.convertIndexEntryToNote(entry)
     }
     return null
   }
 
-  // 新建笔记
-  // 先在本地生成一个临时ID存起来，告诉UI “创建成功”，然后再后台慢慢同步给服务器
-  // 上面的逻辑是放在了 createOfflineNote 方法中吗？
+  // 3. 创建笔记 (直接操作 Y.js)
   async createNote(note: Partial<Note>): Promise<Note> {
-    const offlineNote = await offlineManager.createOfflineNote({
-      title: note.title || 'Untitled',
-      content: note.content || '',
-      tags: note.tags?.map(t => t.name),
-      repositoryId: note.noteRepositories?.[0]?.repositoryId
-    })
+    if (typeof window === 'undefined') throw new Error('createNote only on client')
     
-    return this.convertOfflineNoteToNote(offlineNote)
+    // 动态导入 y-indexeddb 避免 SSR 报错
+    const { IndexeddbPersistence } = await import('y-indexeddb')
+    
+    const id = offlineManager.generateLocalNoteId()
+    const doc = new Doc({ guid: id })
+    
+    // === 关键点：这里把元数据写入了 Y.js (Source of Truth) ===
+    const metadata = doc.getMap('metadata')
+    metadata.set('id', id)
+    metadata.set('title', note.title || 'Untitled')
+    metadata.set('tags', note.tags?.map(t => t.name) || [])
+    metadata.set('repositoryId', note.noteRepositories?.[0]?.repositoryId || '')
+    const now = new Date().toISOString()
+    metadata.set('createdAt', now)
+    metadata.set('updatedAt', now)
+    // =======================================================
+    
+    // 3.2 持久化 Y.Doc 到 IndexedDB (Source of Truth)
+    const persistence = new IndexeddbPersistence(id, doc)
+    await persistence.whenSynced
+    
+    // 3.3 更新搜索索引 (Meta Cache)
+    await offlineManager.updateNoteIndex(doc)
+    
+    // 3.4 清理
+    persistence.destroy()
+    doc.destroy()
+    
+    // 3.5 返回结果
+    const entry = await offlineManager.getNoteIndex(id)
+    return this.convertIndexEntryToNote(entry!)
   }
 
-  // 更新笔记
+  // 4. 更新笔记 (元数据)
   async updateNote(id: string, note: Partial<Note>): Promise<Note> {
-    await offlineManager.updateOfflineNote(id, {
-      title: note.title,
-      content: note.content || undefined, 
-      tags: note.tags?.map(t => t.name)
-    })
+    if (typeof window === 'undefined') throw new Error('updateNote only on client')
     
-    const updated = await offlineManager.getOfflineNote(id)
-    if (!updated) throw new Error('Note not found after update')
+    const { IndexeddbPersistence } = await import('y-indexeddb')
+    const doc = new Doc({ guid: id })
+    const persistence = new IndexeddbPersistence(id, doc)
+    await persistence.whenSynced
+    
+    // === 关键点：更新 Y.js 中的元数据 ===
+    const metadata = doc.getMap('metadata')
+    if (note.title !== undefined) metadata.set('title', note.title)
+    if (note.tags !== undefined) metadata.set('tags', note.tags.map(t => t.name))
+    metadata.set('updatedAt', new Date().toISOString())
+    // ===================================
+    
+    await offlineManager.updateNoteIndex(doc)
+    
+    persistence.destroy()
+    doc.destroy()
+    
+    const entry = await offlineManager.getNoteIndex(id)
+    if (!entry) throw new Error('Note not found after update')
       
-    return this.convertOfflineNoteToNote(updated)
+    return this.convertIndexEntryToNote(entry)
   }
 
-  // 同步待处理操作
+  // 5. 同步待处理操作 (Legacy support, maybe deprecated in pure Y.js mode but kept for safety)
   async syncPendingOperations(): Promise<void> {
-    await offlineManager.syncPendingOperations()
+    // In pure Y.js mode, we rely on y-websocket provider to sync.
+    // This method might be empty or just trigger provider reconnect?
+    // For now, we keep it empty or log.
+    console.log('Sync is handled by Y.js provider automatically')
   }
 
-  // 从服务器同步数据，确保本地数据的一致性（只 pull 不 push）
-  async syncFromApi(options: GetNotesOptions = {}): Promise<void> {
+  // 6. 同步元数据快照 (Initial Sync)
+  // 用于设备首次登录或列表刷新，快速拉取所有笔记的元数据
+  async syncMetadataSnapshot(options: GetNotesOptions = {}): Promise<void> {
     try {
-      // Construct URL with query params
       const params = new URLSearchParams()
       if (options.repositoryId) params.set("repositoryId", options.repositoryId)
-      if (options.searchQuery) params.set("query", options.searchQuery)
-      if (options.sort) {
-        const sortParam = options.sort === "updated" ? "updatedAt" : options.sort === "created" ? "createdAt" : "title"
-        params.set("sort", sortParam)
-      }
-      if (options.order) params.set("order", options.order)
-      if (options.page) params.set("page", options.page.toString())
-      if (options.limit) params.set("limit", options.limit.toString())
-
+      
+      // 我们调用旧的 API 获取列表，但只用它来更新本地索引
       const response = await fetch(`/api/notes?${params.toString()}`)
-      if (!response.ok) throw new Error('Failed to fetch')
+      if (!response.ok) throw new Error('Failed to fetch snapshot')
       const json = await response.json()
-      // Adapt to API response structure (likely { data: Note[] })
       const serverNotes: Note[] = json.data || json
 
       for (const serverNote of serverNotes) {
-        const offlineNote: OfflineNote = {
+        // 将 API 返回的 Note 转换为本地索引格式
+        const entry: NoteIndexEntry = {
           id: serverNote.id,
           title: serverNote.title,
-          content: serverNote.content || '',
+          preview: (serverNote.content || '').slice(0, 200).replace(/<[^>]+>/g, ' '), // Strip tags roughly
           tags: serverNote.tags?.map(t => t.name) || [],
           repositoryId: serverNote.noteRepositories?.[0]?.repositoryId,
           createdAt: new Date(serverNote.createdAt!),
           updatedAt: new Date(serverNote.updatedAt),
-          status: 'synced',
-          serverId: serverNote.id
+          status: 'synced'
         }
 
-        const local = await offlineManager.getOfflineNote(serverNote.id)
-        
-        if (!local) {
-          await offlineManager.saveOfflineNote(offlineNote)
-        } else if (local.status === 'synced') {
-          // Last-Write-Wins based on updatedAt
-          if (new Date(serverNote.updatedAt) > local.updatedAt) {
-            await offlineManager.saveOfflineNote(offlineNote)
-          }
-        } else {
-          // Conflict: Local is pending/dirty
-          // Strategy: Keep local changes (client wins for now)
-          console.log(`Skipping overwrite of dirty note ${serverNote.id}`)
-        }
+        // 保存到索引
+        // 注意：这里我们只更新索引，不更新 Y.Doc Binary。
+        // Y.Doc Binary 会在用户打开笔记时通过 Provider 懒加载。
+        // 或者我们可以尝试从 API 获取 Y.js binary (如果 API 支持)，但目前 API 返回的是 SQL 数据。
+        await offlineManager.saveNoteIndex(entry)
       }
     } catch (error) {
-      console.error('Background sync failed:', error)
+      console.error('Metadata snapshot sync failed:', error)
     }
   }
+  
+  // 保留旧方法以兼容（如果需要），或者直接移除
+  async syncFromApi(options?: GetNotesOptions): Promise<void> {
+      return this.syncMetadataSnapshot(options)
+  }
 }
-
 
 export const noteService = new NoteService()

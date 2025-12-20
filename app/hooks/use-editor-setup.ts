@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useDebounce } from "@/app/hooks/use-debounce"
 import { useOffline } from "@/app/hooks/use-offline"
+import { offlineManager } from "@/lib/offline-manager"
 import { Note } from "@/types"
 import * as Y from "yjs"
 import { HocuspocusProvider } from "@hocuspocus/provider"
@@ -45,7 +46,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
   const loadedNoteId = useRef<string | null>(null)
 
   // 离线功能
-  const { getOfflineNote, updateOfflineNote, triggerGlobalRefresh } = useOffline()
+  const { triggerGlobalRefresh } = useOffline()
 
   // 检查是否是离线笔记
   const isOfflineNote = noteId?.startsWith('local_')
@@ -56,12 +57,13 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
     queryFn: async () => {
       if (isOfflineNote) {
         // 从 IndexedDB 加载离线笔记
-        const offlineNote = await getOfflineNote(noteId!)
+        const offlineNote = await offlineManager.getNoteIndex(noteId!)
         if (!offlineNote) throw new Error("Offline note not found")
         return {
           ...offlineNote,
           role: "OWNER",
           isOffline: true,
+          content: offlineNote.preview || '',
           createdAt: offlineNote.createdAt.toISOString(),
           updatedAt: offlineNote.updatedAt.toISOString(),
           tags: offlineNote.tags.map(tag => ({
@@ -248,7 +250,7 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
 
           // 如果是离线笔记，同时更新 IndexedDB 中的元数据
           if (isOfflineNote) {
-            updateOfflineNote(noteId!, { title: newTitle }).then(() => {
+            offlineManager.updateNoteIndex(yDoc).then(() => {
               // 立即触发离线笔记列表刷新
               triggerGlobalRefresh()
             }).catch(error => {
@@ -263,7 +265,8 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
     mutationFn: async (data: { title?: string; tags?: string[] }) => {
       if (isOfflineNote) {
         // 离线笔记：更新 IndexedDB 中的笔记
-        await updateOfflineNote(noteId!, data)
+        // Note: Y.js 已经自动保存了，这里主要是确保 index 更新
+        await offlineManager.updateNoteIndex(yDoc)
         return { success: true }
       } else {
         // 在线笔记：调用服务器API
