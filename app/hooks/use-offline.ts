@@ -1,278 +1,15 @@
 "use client"
 
+/**
+ * 负责监控网络状态和触发同步，不再插手具体的数据操作
+ * 数据操作逻辑放到NoteService
+ */
+
 import { useState, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import * as Y from 'yjs'
-import { OfflineNote, OfflineOperation, SyncResult } from '@/types'
-import { useDebounce } from '@/app/hooks/use-debounce'
+import { offlineManager } from '@/lib/offline-manager'
 
-// IndexedDB 数据库名称和版本
-const DB_NAME = 'noteol_offline'
-const DB_VERSION = 1
-
-class OfflineManager {
-  private db: IDBDatabase | null = null
-  private isOnline = false
-
-  constructor() {
-    // 只在客户端初始化
-    if (typeof window !== 'undefined') {
-      this.isOnline = navigator.onLine
-      this.initDB()
-      this.setupNetworkListeners()
-    }
-  }
-
-  private async initDB() {
-    return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION)
-
-      request.onerror = () => {
-        console.error('Failed to open offline database')
-        reject(request.error)
-      }
-
-      request.onsuccess = () => {
-        this.db = request.result
-        resolve()
-      }
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result
-
-        // 创建离线笔记存储
-        if (!db.objectStoreNames.contains('offline_notes')) {
-          const notesStore = db.createObjectStore('offline_notes', { keyPath: 'id' })
-          notesStore.createIndex('status', 'status', { unique: false })
-          notesStore.createIndex('repositoryId', 'repositoryId', { unique: false })
-        }
-
-        // 创建离线操作存储
-        if (!db.objectStoreNames.contains('offline_operations')) {
-          const operationsStore = db.createObjectStore('offline_operations', { keyPath: 'id' })
-          operationsStore.createIndex('status', 'status', { unique: false })
-          operationsStore.createIndex('type', 'type', { unique: false })
-        }
-      }
-    })
-  }
-
-  private setupNetworkListeners() {
-    if (typeof window === 'undefined') return
-
-    window.addEventListener('online', () => {
-      this.isOnline = true
-      this.syncPendingOperations()
-    })
-
-    window.addEventListener('offline', () => {
-      this.isOnline = false
-    })
-  }
-
-  // 生成本地笔记ID
-  generateLocalNoteId(): string {
-    return `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  }
-
-  // 离线创建笔记
-  async createOfflineNote(data: {
-    title: string
-    content?: string
-    tags?: string[]
-    repositoryId?: string
-  }): Promise<OfflineNote> {
-    const note: OfflineNote = {
-      id: this.generateLocalNoteId(),
-      title: data.title,
-      content: data.content || '',
-      tags: data.tags || [],
-      repositoryId: data.repositoryId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      status: 'pending'
-    }
-
-    await this.saveOfflineNote(note)
-    return note
-  }
-
-  // 保存离线笔记到IndexedDB
-  private async saveOfflineNote(note: OfflineNote): Promise<void> {
-    if (!this.db) await this.initDB()
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offline_notes'], 'readwrite')
-      const store = transaction.objectStore('offline_notes')
-      const request = store.put(note)
-
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
-    })
-  }
-
-  // 获取所有离线笔记
-  async getOfflineNotes(): Promise<OfflineNote[]> {
-    if (!this.db) await this.initDB()
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offline_notes'], 'readonly')
-      const store = transaction.objectStore('offline_notes')
-      const request = store.getAll()
-
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
-    })
-  }
-
-  // 获取待同步的笔记
-  async getPendingNotes(): Promise<OfflineNote[]> {
-    const allNotes = await this.getOfflineNotes()
-    return allNotes.filter(note => note.status === 'pending')
-  }
-
-  // 更新笔记状态
-  async updateNoteStatus(noteId: string, status: OfflineNote['status'], serverId?: string): Promise<void> {
-    if (!this.db) await this.initDB()
-
-    const note = await this.getOfflineNote(noteId)
-    if (note) {
-      note.status = status
-      if (serverId) note.serverId = serverId
-      note.updatedAt = new Date()
-      await this.saveOfflineNote(note)
-    }
-  }
-
-  // 获取单个离线笔记
-  async getOfflineNote(noteId: string): Promise<OfflineNote | null> {
-    if (!this.db) await this.initDB()
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offline_notes'], 'readonly')
-      const store = transaction.objectStore('offline_notes')
-      const request = store.get(noteId)
-
-      request.onsuccess = () => resolve(request.result || null)
-      request.onerror = () => reject(request.error)
-    })
-  }
-
-  // 删除离线笔记
-  async deleteOfflineNote(noteId: string): Promise<void> {
-    if (!this.db) await this.initDB()
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offline_notes'], 'readwrite')
-      const store = transaction.objectStore('offline_notes')
-      const request = store.delete(noteId)
-
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
-    })
-  }
-
-  // 更新离线笔记
-  async updateOfflineNote(noteId: string, updates: Partial<OfflineNote>): Promise<void> {
-    if (!this.db) await this.initDB()
-
-    const note = await this.getOfflineNote(noteId)
-    if (note) {
-      const updatedNote = { ...note, ...updates, updatedAt: new Date() }
-      await this.saveOfflineNote(updatedNote)
-    } else {
-    }
-  }
-
-  // 同步待处理的笔记到服务器
-  async syncPendingNotes(): Promise<SyncResult[]> {
-    if (!this.isOnline) return []
-
-    const pendingNotes = await this.getPendingNotes()
-    const results: SyncResult[] = []
-
-    for (const note of pendingNotes) {
-      try {
-        await this.updateNoteStatus(note.id, 'syncing')
-
-        // 调用服务器API创建笔记
-        const response = await fetch('/api/notes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: note.title,
-            content: note.content,
-            tags: note.tags,
-            repositoryId: note.repositoryId
-          })
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-
-        const result = await response.json()
-        const serverId = result.data.id
-
-        // 更新状态为已同步
-        await this.updateNoteStatus(note.id, 'synced', serverId)
-
-        results.push({
-          success: true,
-          operationId: note.id,
-          serverId
-        })
-
-      } catch (error) {
-        console.error(`Failed to sync note ${note.id}:`, error)
-        await this.updateNoteStatus(note.id, 'failed')
-
-        results.push({
-          success: false,
-          operationId: note.id,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    }
-
-    return results
-  }
-
-  // 同步所有待处理的离线操作
-  async syncPendingOperations(): Promise<void> {
-    if (!this.isOnline) return
-
-    try {
-      const results = await this.syncPendingNotes()
-
-      const successCount = results.filter(r => r.success).length
-      const failCount = results.filter(r => !r.success).length
-
-      if (successCount > 0) {
-        toast.success(`已同步 ${successCount} 篇离线创建的笔记`)
-      }
-
-      if (failCount > 0) {
-        toast.error(`${failCount} 篇笔记同步失败，请稍后重试`)
-      }
-
-    } catch (error) {
-      console.error('Failed to sync offline operations:', error)
-      toast.error('离线同步失败')
-    }
-  }
-
-  // 检查是否在线
-  get isOnlineStatus(): boolean {
-    return this.isOnline
-  }
-}
-
-// 创建单例实例
-const offlineManager = new OfflineManager()
-
-// 全局刷新回调
+// Global callback for refreshing UI
 let globalRefreshCallback: (() => void) | null = null
 
 // React Hook for offline functionality
@@ -292,6 +29,7 @@ export function useOffline() {
   const updatePendingCount = useCallback(async () => {
     if (!isClient) return
     try {
+      // 获取待更改的Notes
       const pendingNotes = await offlineManager.getPendingNotes()
       setPendingNotesCount(pendingNotes.length)
     } catch (error) {
@@ -300,6 +38,10 @@ export function useOffline() {
   }, [isClient])
 
   // 监听网络状态变化
+  // A: 为什么useEffect放这么后，钩子不是顶部调用吗？
+  // 答：React Hook 必须在函数组件的顶层作用域调用，但位置可以在其他变量定义之后。
+  // 只要不放在 if/for 循环内部，顺序并不影响其作为“顶层调用”的性质。
+  // 这里放在后面是因为它依赖了上面定义的 updatePendingCount。
   useEffect(() => {
     if (!isClient) return
 
@@ -338,55 +80,20 @@ export function useOffline() {
   const triggerGlobalRefresh = useCallback(() => {
     if (globalRefreshCallback) {
       globalRefreshCallback()
-    } else {
     }
   }, [])
 
-  // 使用 useCallback 包装方法以保持引用稳定
-  const createOfflineNote = useCallback(async (data: {
-    title: string
-    content?: string
-    tags?: string[]
-    repositoryId?: string
-  }) => {
-    if (!isClient) throw new Error('Not available on server')
-    return offlineManager.createOfflineNote(data)
-  }, [isClient])
-
-  const updateOfflineNote = useCallback(async (noteId: string, updates: Partial<OfflineNote>) => {
-    if (!isClient) return
-    return offlineManager.updateOfflineNote(noteId, updates)
-  }, [isClient])
-
+  // 同步离线操作
   const syncPendingOperations = useCallback(async () => {
     if (!isClient) return
     return offlineManager.syncPendingOperations()
   }, [isClient])
 
-  const getOfflineNotes = useCallback(async () => {
-    if (!isClient) return []
-    return offlineManager.getOfflineNotes()
-  }, [isClient])
-
-  const getOfflineNote = useCallback(async (noteId: string) => {
-    if (!isClient) return null
-    return offlineManager.getOfflineNote(noteId)
-  }, [isClient])
-
-  const deleteOfflineNote = useCallback(async (noteId: string) => {
-    if (!isClient) return
-    return offlineManager.deleteOfflineNote(noteId)
-  }, [isClient])
-
+  // 返回的方法
   return {
     isOnline,
     pendingNotesCount,
-    createOfflineNote,
-    updateOfflineNote,
     syncPendingOperations,
-    getOfflineNotes,
-    getOfflineNote,
-    deleteOfflineNote,
     setGlobalRefreshCallback,
     triggerGlobalRefresh,
   }

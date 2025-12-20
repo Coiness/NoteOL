@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect } from "react" // 添加这一行
+import { useEffect } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useOffline } from "@/app/hooks/use-offline"
 import { useStore } from "@/store/useStore"
+import { noteService } from "@/lib/services/note-service"
 
 interface UseNoteOperationsProps {
   repositoryId?: string
@@ -16,32 +17,24 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
   const queryClient = useQueryClient()
   const defaultRepositoryId = useStore(state => state.defaultRepositoryId)
 
-  // 离线功能
-  const { isOnline, createOfflineNote } = useOffline()
+  // 离线功能 (仅用于获取在线状态)
+  const { isOnline } = useOffline()
 
-  // 创建新笔记 (支持离线)
+  // 创建新笔记 (统一使用 NoteService)
   const createMutation = useMutation({
     mutationFn: async () => {
-      // 如果在线，尝试直接创建
-      if (isOnline) {
-        const res = await fetch("/api/notes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: "无标题笔记",
-            repositoryId: repositoryId // 传入当前知识库ID
-          }),
-        })
-        if (!res.ok) throw new Error("Failed to create note")
-        return res.json()
-      } else {
-        // 如果离线，创建本地笔记
-        const offlineNote = await createOfflineNote({
-          title: "无标题笔记",
-          repositoryId: repositoryId
-        })
-        return { data: offlineNote, isOffline: true }
-      }
+      // 无论在线还是离线，都调用 noteService.createNote
+      // NoteService 内部会先写 IDB，后台自动同步
+      const newNote = await noteService.createNote({
+        title: "无标题笔记",
+        // 传入 noteRepositories 结构以适配 NoteService
+        noteRepositories: repositoryId ? [{ repositoryId } as any] : []
+      })
+      
+      // 检查是否是离线生成的ID (以 local_ 开头)
+      const isOfflineId = newNote.id.startsWith('local_')
+      
+      return { data: newNote, isOffline: isOfflineId }
     },
     onSuccess: async (data) => {
       // 只刷新与当前 repository 相关的 notes 查询，避免全量刷新
@@ -56,6 +49,7 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
       if (!targetRepositoryId) {
         // 如果没有指定 repositoryId，需要获取默认知识库的ID
         try {
+          // 这里的 fetch 也可以考虑未来移入 RepositoryService
           const res = await fetch("/api/repositories")
           if (res.ok) {
             const repoData = await res.json()
@@ -86,6 +80,8 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
         }
       } else {
         // 在线创建的笔记，使用服务器ID
+        // 注意：NoteService 的 createNote 返回的即使是在线同步后的数据，ID 也可能是 local_ 开头（如果还没来得及同步回来）
+        // 但如果是在线状态，后台 sync 很快，这里我们主要依赖 isOffline 判断
         if (targetRepositoryId) {
           router.push(`/repositories/${targetRepositoryId}?noteId=${data.data.id}`)
         } else {
@@ -95,12 +91,12 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
     },
     onError: (error) => {
       console.error("Failed to create note:", error)
-      toast.error(isOnline ? "创建笔记失败" : "离线模式下无法创建笔记")
+      toast.error("创建笔记失败")
     },
   })
 
   return {
-    createMutation,
-    isOnline,
+    createNote: createMutation.mutate,
+    isCreating: createMutation.isPending
   }
 }

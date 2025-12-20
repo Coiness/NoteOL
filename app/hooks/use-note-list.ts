@@ -1,10 +1,8 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { Note } from "@/types"
-import { useOffline } from "@/app/hooks/use-offline"
-import { OfflineNote } from "@/types"
+import { noteService } from "@/lib/services/note-service"
 
 interface UseNoteListProps {
   repositoryId?: string
@@ -13,7 +11,6 @@ interface UseNoteListProps {
 }
 
 export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteListProps) {
-  // 获取在线笔记列表 (无限滚动)
   const {
     data,
     isLoading,
@@ -26,18 +23,27 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
       const [sort, order] = sortOrder.split("_")
       const sortParam = sort === "updated" ? "updatedAt" : sort === "created" ? "createdAt" : "title"
 
-      const params = new URLSearchParams()
-      if (repositoryId) params.set("repositoryId", repositoryId)
-      if (searchQuery) params.set("query", searchQuery)
-      params.set("sort", sortParam)
-      params.set("order", order)
-      params.set("page", pageParam.toString())
-      params.set("limit", "20")
+      // 调用 NoteService 获取数据（优先返回本地数据，后台自动同步）
+      const notes = await noteService.getNotes({
+        repositoryId,
+        searchQuery,
+        sort: sortParam as any,
+        order: order as any,
+        page: pageParam,
+        limit: 20
+      })
 
-      const res = await fetch(`/api/notes?${params.toString()}`)
-      if (!res.ok) throw new Error("Failed to fetch notes")
-      const json = await res.json()
-      return json.data
+      // 构造分页结构
+      // 注意：NoteService 目前返回的是数组，我们需要手动包装成分页格式
+      // 如果 notes 数量等于 limit，我们假设还有下一页
+      return {
+        notes,
+        pagination: {
+          page: pageParam,
+          limit: 20,
+          hasMore: notes.length === 20
+        }
+      }
     },
     getNextPageParam: (lastPage) => {
       if (lastPage.pagination.hasMore) {
@@ -46,111 +52,18 @@ export function useNoteList({ repositoryId, searchQuery, sortOrder }: UseNoteLis
       return undefined
     },
     initialPageParam: 1,
-    staleTime: 1000 * 10, // 10秒内不重新请求
-    refetchOnWindowFocus: false,
+    // 设置较短的 staleTime 以便在数据更新时及时刷新，或者依赖 invalidateQueries
+    staleTime: 1000 * 5, 
+    refetchOnWindowFocus: true,
   })
 
   const notes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
-  const [offlineNotes, setOfflineNotes] = useState<OfflineNote[]>([])
-
-  // 离线功能
-  const { getOfflineNotes, setGlobalRefreshCallback } = useOffline()
-
-  // 使用 useRef 存储稳定的刷新函数，避免依赖变化导致的循环
-  const refreshOfflineNotesRef = useRef<() => Promise<void>>(async () => {})
-
-  // 刷新离线笔记的函数 - 使用 useRef 确保稳定
-  refreshOfflineNotesRef.current = useCallback(async () => {
-    try {
-      const notes = await getOfflineNotes()
-      const filteredNotes = notes.filter(note =>
-        !repositoryId || note.repositoryId === repositoryId
-      )
-      setOfflineNotes(filteredNotes)
-    } catch (error) {
-      console.error("Failed to refresh offline notes:", error)
-    }
-  }, [repositoryId, getOfflineNotes])
-
-  // 设置全局刷新回调 - 只在组件挂载时设置一次
-  useEffect(() => {
-    const stableCallback = () => {
-      refreshOfflineNotesRef.current?.()
-    }
-    setGlobalRefreshCallback(stableCallback)
-
-    // 组件卸载时清理
-    return () => {
-      setGlobalRefreshCallback(() => {})
-    }
-  }, []) // 空依赖数组，只在挂载时执行一次
-
-  // 加载离线笔记
-  useEffect(() => {
-    refreshOfflineNotesRef.current?.()
-    // 移除轮询，改为依赖事件触发刷新，避免控制台刷屏
-    // const interval = setInterval(() => refreshOfflineNotesRef.current?.(), 2000)
-    // return () => clearInterval(interval)
-  }, []) // 移除依赖，避免循环
-
-  // 合并在线和离线笔记，并按当前排序规则排序 - 使用 useMemo 优化
-  const allNotes = useMemo(() => {
-    const onlineNotes = (data?.pages.flatMap((page: any) => page.notes) || []) as Note[]
-
-    const offlineNotesConverted = offlineNotes.map(note => ({
-      ...note,
-      role: "OWNER" as const,
-      isOffline: true,
-      createdAt: note.createdAt.toISOString(),
-      updatedAt: note.updatedAt.toISOString(),
-      tags: note.tags.map(tag => ({
-        id: tag,
-        name: tag,
-        userId: "",
-        createdAt: note.createdAt.toISOString()
-      })) // 将 string[] 转换为 Tag[]
-    } as Note & { isOffline: boolean }))
-
-    const result = [...onlineNotes, ...offlineNotesConverted].sort((a, b) => {
-      // 根据当前排序规则排序
-      const [sortField, sortDirection] = sortOrder.split("_")
-      const multiplier = sortDirection === "desc" ? -1 : 1
-
-      let aValue: any, bValue: any
-
-      switch (sortField) {
-        case "updated":
-          aValue = new Date(a.updatedAt).getTime()
-          bValue = new Date(b.updatedAt).getTime()
-          break
-        case "created":
-          aValue = new Date(a.createdAt || a.updatedAt).getTime()
-          bValue = new Date(b.createdAt || b.updatedAt).getTime()
-          break
-        case "title":
-          aValue = (a.title || "").toLowerCase()
-          bValue = (b.title || "").toLowerCase()
-          break
-        default:
-          aValue = new Date(a.updatedAt).getTime()
-          bValue = new Date(b.updatedAt).getTime()
-      }
-
-      if (typeof aValue === "string") {
-        return aValue.localeCompare(bValue) * multiplier
-      }
-
-      return (aValue - bValue) * multiplier
-    })
-
-    return result
-  }, [data, offlineNotes, sortOrder])
 
   return {
-    allNotes,
+    notes,
     isLoading,
     fetchNextPage,
     hasNextPage,
-    isFetchingNextPage,
+    isFetchingNextPage
   }
 }
