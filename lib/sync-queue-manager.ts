@@ -53,8 +53,15 @@ class SyncQueueManager {
     })
   }
 
-  // 将操作加入队列
-  // 注意：操作已经在 NoteService 中先应用到了本地 (Y.js/Index)，这里只是为了稍后同步给服务器
+  /**
+   * 将操作加入队列
+   * 
+   * 当用户进行操作（创建/更新/删除）时，首先调用此方法将操作持久化到 IndexedDB。
+   * 注意：操作通常已经在 NoteService 中先应用到了本地 (Y.js/Index)，这里只是为了稍后同步给服务器 (Dual-Write)。
+   * 
+   * @param {Omit<SyncOperation, 'id' | 'createdAt' | 'status' | 'retryCount'>} operation - 待同步的操作详情
+   * @returns {Promise<void>}
+   */
   async enqueue(operation: Omit<SyncOperation, 'id' | 'createdAt' | 'status' | 'retryCount'>): Promise<void> {
     const db = await this.getDB()
     const op: SyncOperation = {
@@ -82,7 +89,14 @@ class SyncQueueManager {
     })
   }
 
-  // 处理队列中的所有操作
+  /**
+   * 处理队列中的所有操作
+   * 
+   * 按 FIFO (先进先出) 顺序读取待处理的操作，并逐个执行。
+   * 包含防抖和并发锁机制，防止重复处理。
+   * 
+   * @returns {Promise<void>}
+   */
   async processQueue(): Promise<void> {
     // 防止并发处理
     if (this.isProcessing) return

@@ -12,6 +12,23 @@ interface UseNoteOperationsProps {
   repositoryId?: string
 }
 
+/**
+ * useNoteOperations Hook
+ * 
+ * 封装笔记相关的操作逻辑，目前主要用于创建新笔记。
+ * 
+ * 核心功能:
+ * 1. 创建笔记 (createNote):
+ *    - 支持离线创建 (生成 local_ ID)
+ *    - 自动关联到当前或默认知识库
+ *    - 创建成功后自动跳转到编辑页
+ *    - 自动刷新相关列表缓存
+ * 
+ * @param {UseNoteOperationsProps} props - 配置参数
+ * @param {string} [props.repositoryId] - 当前所在的知识库 ID (如果有)
+ * 
+ * @returns {Object} - 包含操作方法和状态的对象
+ */
 export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -98,6 +115,5 @@ export function useNoteOperations({ repositoryId }: UseNoteOperationsProps) {
   return {
     createNote: createMutation.mutate,
     isCreating: createMutation.isPending,
-    isOnline
   }
 }

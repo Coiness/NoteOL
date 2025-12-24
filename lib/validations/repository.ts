@@ -1,3 +1,9 @@
+/**
+ * 知识库验证 Schema 定义
+ * 
+ * 用于创建和更新知识库时的表单验证。
+ */
+
 import * as z from "zod"
 
 export const repositorySchema = z.object({

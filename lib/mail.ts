@@ -1,5 +1,12 @@
 import nodemailer from "nodemailer"
 
+/**
+ * 邮件发送服务
+ * 
+ * 使用 Nodemailer 发送系统邮件，如注册验证码等。
+ * 配置信息依赖于环境变量。
+ */
+
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_SERVER_HOST,
   port: Number(process.env.EMAIL_SERVER_PORT),
@@ -10,6 +17,15 @@ const transporter = nodemailer.createTransport({
   },
 })
 
+/**
+ * 发送验证码邮件
+ * 
+ * 发送包含6位数字验证码的 HTML 邮件给用户。
+ * 
+ * @param {string} email - 收件人邮箱
+ * @param {string} token - 验证码
+ * @returns {Promise<SMTPTransport.SentMessageInfo>} - 发送结果信息
+ */
 export async function sendVerificationEmail(email: string, token: string) {
   const info = await transporter.sendMail({
     from: `"NoteOL" <${process.env.EMAIL_FROM}>`,

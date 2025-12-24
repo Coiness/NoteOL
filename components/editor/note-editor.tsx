@@ -1,4 +1,16 @@
-﻿"use client"
+"use client"
+
+/**
+ * NoteEditor: 核心编辑器组件
+ * 
+ * 集成了 Tiptap 编辑器和 Y.js 实时协作引擎。
+ * 
+ * 核心功能:
+ * 1. 初始化 Tiptap 编辑器实例，配置各种扩展 (Markdown, TaskList, Table 等)
+ * 2. 通过 HocuspocusProvider 连接协作服务 (WebSocket)
+ * 3. 实现了离线优先 (Offline-First) 的数据加载策略 (通过 y-indexeddb)
+ * 4. 处理编辑器的错误边界 (ErrorBoundary) 和加载状态
+ */
 
 import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
@@ -35,7 +47,12 @@ import { TableOfContents } from "./table-of-contents"
 
 const lowlight = createLowlight(common)
 
-// 错误边界fallback组件
+/**
+ * 编辑器错误回退 UI
+ * 
+ * 当编辑器组件崩溃时显示的界面，提供重试按钮。
+ * 区分了网络/协作连接错误和通用初始化错误。
+ */
 function EditorErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   return (
     <div className="flex h-full items-center justify-center p-8">
@@ -63,12 +80,17 @@ function EditorErrorFallback({ error, resetErrorBoundary }: { error: Error; rese
 
 interface TiptapEditorProps {
   noteId: string
+  /** Y.js 文档实例 (Source of Truth) */
   yDoc: Y.Doc
+  /** 协作提供者 (可选，离线模式下可能为 null) */
   provider: HocuspocusProvider | null
   readOnly: boolean
   session: any
 }
 
+/**
+ * Tiptap 编辑器核心逻辑封装
+ */
 function TiptapEditor({ noteId, yDoc, provider, readOnly, session }: TiptapEditorProps) {
   const { setActiveNoteId, updateNotePreview, setActiveNoteContent } = useStore()
 
@@ -76,7 +98,7 @@ function TiptapEditor({ noteId, yDoc, provider, readOnly, session }: TiptapEdito
   const extensions = useMemo(() => [
     StarterKit.configure({
       // @ts-ignore
-      history: false, // ⚠️ 必须禁用自带历史记录，交给 Y.js
+      history: false, // ⚠️ 必须禁用自带历史记录，交给 Y.js 的 UndoManager 处理
     }),
     Image,
     Link.configure({

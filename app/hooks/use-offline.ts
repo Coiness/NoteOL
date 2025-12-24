@@ -1,8 +1,19 @@
 "use client"
 
 /**
- * 负责监控网络状态和触发同步，不再插手具体的数据操作
- * 数据操作逻辑放到NoteService
+ * useOffline Hook
+ * 
+ * 负责监控网络状态和管理全局数据同步策略。
+ * 
+ * 核心职责:
+ * 1. 监听 window 的 online/offline 事件，实时更新在线状态
+ * 2. 当网络从离线恢复为在线时，自动触发同步队列处理 (syncQueueManager)
+ * 3. 实现轮询机制 (Polling)，定期 (每5分钟) 拉取最新的元数据快照
+ * 4. 提供全局刷新机制，允许在网络状态变化时触发 UI 更新
+ * 
+ * 注意: 此 Hook 不包含具体的数据读写逻辑，只负责协调同步时机。
+ * 
+ * @returns {Object} - 包含在线状态和手动触发刷新的方法
  */
 
 import { useState, useEffect, useCallback } from 'react'

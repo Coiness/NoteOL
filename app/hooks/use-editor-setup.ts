@@ -1,5 +1,18 @@
 "use client"
 
+/**
+ * useEditorSetup: 编辑器状态与逻辑封装 Hook
+ * 
+ * 核心职责:
+ * 1. 初始化 Y.js 文档 (yDoc) 与 Provider (Hocuspocus + IndexedDB)
+ * 2. 管理编辑器的加载状态、错误状态、权限判断 (Role)
+ * 3. 协调 React 状态 (Title, Tags) 与 Y.js 共享状态的双向绑定
+ * 4. 处理离线优先策略 (Offline First):
+ *    - 优先加载本地 IndexedDB 数据
+ *    - 自动检测网络状态并切换同步模式
+ * 5. 提供保存 (Save) 和删除 (Delete) 的 Mutation 逻辑
+ */
+
 import { useState, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import type { Query } from "@tanstack/query-core"

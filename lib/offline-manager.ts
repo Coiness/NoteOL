@@ -6,10 +6,6 @@
  * 2. 维护轻量级笔记索引 (notes_index)，用于快速列表渲染和搜索
  * 3. 提供本地全文搜索能力 (基于内存过滤)
  * 4. 从 Y.Doc 中提取元数据并更新索引
- * 
- * 注意:
- * - 本类不再负责 "离线操作队列" (已废弃)，因为数据同步已移交给 Y.js
- * - 真正的 Y.js 二进制数据由 y-indexeddb 库直接管理，不经过此类
  */
 
 import { Doc } from 'yjs'
@@ -80,7 +76,14 @@ export class OfflineManager {
     })
   }
 
-  // 生成本地笔记ID
+  /**
+   * 生成本地笔记ID
+   * 
+   * 使用 crypto.randomUUID 生成标准的 UUID v4。
+   * 如果环境不支持，则回退到基于 Math.random 的 polyfill。
+   * 
+   * @returns {string} - UUID 字符串
+   */
   generateLocalNoteId(): string {
     // 使用标准 UUID 替代 local_ 前缀，以便于服务器兼容
     // 如果浏览器不支持 randomUUID，回退到基于时间的生成方式但保持 UUID 格式长度
@@ -93,7 +96,15 @@ export class OfflineManager {
     });
   }
 
-  // 更新笔记索引 (New Architecture)
+  /**
+   * 更新笔记索引
+   * 
+   * 从 Y.js 文档 (Y.Doc) 中提取最新的元数据 (Title, Tags, UpdatedAt)，
+   * 并解析文档内容生成预览文本 (Preview)，然后更新到 IndexedDB 的 notes_index 存储中。
+   * 
+   * @param {Doc} doc - Y.js 文档实例
+   * @returns {Promise<void>}
+   */
   async updateNoteIndex(doc: Doc): Promise<void> {
     if (!this.db) await this.initDB()
 
@@ -101,18 +112,23 @@ export class OfflineManager {
     const id = (metadata.get('id') as string) || doc.guid
     if (!id) return
 
-    // 简单提取文本预览
+    // 4. 从 Y.Doc 中提取元数据并更新索引
+    //    (包括生成列表页所需的预览文本：取首句或前30字)
+    
+    // 提取文本预览 (用于列表展示，避免加载完整 Y.Doc)
+    // 规则：取第一句话(以句号/换行符结尾) 或 前30个字符，取较短者
     let preview = ''
     try {
       const fragment = doc.getXmlFragment('default')
       const xmlString = fragment.toString()
-      // Strip HTML tags using regex
+      // 移除 HTML 标签
       const text = xmlString.replace(/<[^>]+>/g, ' ').trim()
-      // Take first 30 chars or first sentence (dot/newline), whichever is shorter
+      // 获取第一句话
       const firstSentence = text.split(/[.\n]/)[0]
+      // 截断逻辑：如果第一句短于30字则用第一句，否则截取前30字
       preview = (firstSentence.length < 30 ? firstSentence : text.slice(0, 30))
     } catch (e) {
-      // Ignore
+      // 预览生成失败不应阻塞索引更新
     }
 
     const entry: NoteIndexEntry = {
