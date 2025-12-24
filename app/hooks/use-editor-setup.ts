@@ -173,7 +173,12 @@ export function useEditorSetup({ noteId, repositoryId, isDefaultRepository, onDe
     const yTitle = yDoc.getText('title')
 
     const observer = () => {
-      setTitle(yTitle.toString())
+      // 只有当本地状态与 Y.js 不一致时才更新，避免循环
+      const newVal = yTitle.toString()
+      setTitle(prev => {
+        if (prev !== newVal) return newVal
+        return prev
+      })
     }
 
     yTitle.observe(observer)

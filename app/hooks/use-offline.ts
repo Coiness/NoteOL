@@ -8,10 +8,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
-// Global callback for refreshing UI
 let globalRefreshCallback: (() => void) | null = null
 
-// React Hook for offline functionality
 export function useOffline() {
   const [isOnline, setIsOnline] = useState(false)
   const [isClient, setIsClient] = useState(false)

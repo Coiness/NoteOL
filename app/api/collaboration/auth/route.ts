@@ -23,7 +23,26 @@ export async function GET(req: NextRequest) {
     return new NextResponse("noteId is required", { status: 400 })
   }
 
-  // 3. 检查用户对笔记的权限
+  // 3. 特殊处理：本地离线笔记 (local_ 开头)
+  // 因为离线笔记尚未同步到数据库，我们默认授予 OWNER 权限
+  // 这样 Hocuspocus 才能接受连接并处理内容同步 (Sync Queue 稍后会处理元数据)
+  if (noteId.startsWith('local_')) {
+      const secret = process.env.COLLABORATION_SECRET || "super-secret-key"
+      const token = jwt.sign(
+        {
+          userId: session.user.id,
+          name: session.user.name,
+          image: session.user.image,
+          noteId: noteId,
+          role: "OWNER"
+        },
+        secret,
+        { expiresIn: "1m" }
+      )
+      return NextResponse.json({ token, role: "OWNER" })
+  }
+
+  // 4. 检查用户对笔记的权限
   const note = await prisma.note.findUnique({
     where: { id: noteId },
     include: {

@@ -82,7 +82,15 @@ export class OfflineManager {
 
   // 生成本地笔记ID
   generateLocalNoteId(): string {
-    return `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    // 使用标准 UUID 替代 local_ 前缀，以便于服务器兼容
+    // 如果浏览器不支持 randomUUID，回退到基于时间的生成方式但保持 UUID 格式长度
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID()
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
   }
 
   // 更新笔记索引 (New Architecture)
@@ -99,7 +107,10 @@ export class OfflineManager {
       const fragment = doc.getXmlFragment('default')
       const xmlString = fragment.toString()
       // Strip HTML tags using regex
-      preview = xmlString.replace(/<[^>]+>/g, ' ').slice(0, 200).trim()
+      const text = xmlString.replace(/<[^>]+>/g, ' ').trim()
+      // Take first 30 chars or first sentence (dot/newline), whichever is shorter
+      const firstSentence = text.split(/[.\n]/)[0]
+      preview = (firstSentence.length < 30 ? firstSentence : text.slice(0, 30))
     } catch (e) {
       // Ignore
     }

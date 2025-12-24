@@ -156,11 +156,39 @@ export class NoteService implements INoteService {
     // 3.3 更新搜索索引 (Meta Cache)
     await offlineManager.updateNoteIndex(doc)
     
-    // 3.4 清理
-    persistence.destroy()
-    doc.destroy()
+    // 3.5 同步创建请求到服务器 (SyncQueue)
+    // 即使是在线状态，也建议走队列或立即发送，以确保服务器有这条记录
+    const createPayload = {
+        title: note.title || 'Untitled',
+        tags: note.tags?.map(t => t.name) || [],
+        repositoryId: note.noteRepositories?.[0]?.repositoryId
+    }
+
+    if (navigator.onLine) {
+        try {
+            // 使用 PUT 方法创建 (Upsert)，指定 ID
+            await fetch(`/api/notes/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(createPayload),
+            })
+        } catch (e) {
+            console.error('Failed to sync create to server, enqueueing:', e)
+            await syncQueueManager.enqueue({
+                type: 'CREATE',
+                noteId: id,
+                payload: createPayload
+            })
+        }
+    } else {
+        await syncQueueManager.enqueue({
+            type: 'CREATE',
+            noteId: id,
+            payload: createPayload
+        })
+    }
     
-    // 3.5 返回结果
+    // 3.6 返回结果
     const entry = await offlineManager.getNoteIndex(id)
     return this.convertIndexEntryToNote(entry!)
   }
@@ -191,10 +219,16 @@ export class NoteService implements INoteService {
     if (navigator.onLine && !id.startsWith('local_')) {
       try {
         const requestId = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `${Date.now()}`
+        // Transform payload for API (tags: Tag[] -> string[])
+        const apiPayload: any = { ...note }
+        if (note.tags) {
+            apiPayload.tags = note.tags.map(t => t.name)
+        }
+
         await fetch(`/api/notes/${id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
-            body: JSON.stringify(note),
+            body: JSON.stringify(apiPayload),
         })
       } catch (e) {
         console.error('Failed to sync update to server, enqueueing:', e)
@@ -269,7 +303,25 @@ export class NoteService implements INoteService {
       const response = await fetch(`/api/notes?${params.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch snapshot')
       const json = await response.json()
-      const serverNotes: Note[] = json.data || json
+      // Fix: Handle API response structure correctly
+      // API returns { notes: [...], pagination: {...} } or sometimes wrapped in { data: ... }
+      let serverNotes: Note[] = []
+      
+      if (Array.isArray(json)) {
+          serverNotes = json
+      } else if (Array.isArray(json.data)) {
+          serverNotes = json.data
+      } else if (Array.isArray(json.notes)) {
+          serverNotes = json.notes
+      } else if (json.data && Array.isArray(json.data.notes)) {
+          // Handle nested structure from apiSuccess wrapper
+          serverNotes = json.data.notes
+      }
+      
+      if (!Array.isArray(serverNotes)) {
+        console.warn('syncMetadataSnapshot received unexpected data structure:', json)
+        return
+      }
 
       for (const serverNote of serverNotes) {
         // 将 API 返回的 Note 转换为本地索引格式

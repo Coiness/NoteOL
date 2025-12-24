@@ -13,5 +13,13 @@ export const noteUpdateSchema = z.object({
   tags: z.array(z.string()).optional(),
 })
 
+export const noteUpsertSchema = z.object({
+  title: z.string().max(100, { message: "标题不能超过100个字符" }).optional(),
+  content: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  repositoryId: z.string().optional(),
+})
+
 export type NoteCreateFormValues = z.infer<typeof noteCreateSchema>
 export type NoteUpdateFormValues = z.infer<typeof noteUpdateSchema>
+export type NoteUpsertFormValues = z.infer<typeof noteUpsertSchema>
